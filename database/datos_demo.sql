@@ -42,17 +42,17 @@ INSERT INTO chofer (id, usuario_id, linea_id, numero_licencia, telefono) VALUES
     (8, 13, 3, 'DEMO-LIC-0008', '933 100 0008'),
     (9, 14, 3, 'DEMO-LIC-0009', '933 100 0009');
 
-INSERT INTO vehiculo (id, linea_id, numero_unidad, placa, modelo, capacidad, cuenta_con_gps) VALUES
-    (1, 1, 'TUC-01', 'DEMO-101', 'Autobús urbano 2019', 60, 1),
-    (2, 1, 'TUC-02', 'DEMO-102', 'Autobús urbano 2020', 60, 1),
-    (3, 1, 'TUC-03', 'DEMO-103', 'Microbús 2016',       30, 0),
-    (4, 2, 'AGR-01', 'DEMO-201', 'Autobús urbano 2021', 70, 1),
-    (5, 2, 'AGR-02', 'DEMO-202', 'Autobús urbano 2021', 70, 1),
-    (6, 2, 'AGR-03', 'DEMO-203', 'Autobús urbano 2015', 60, 0),
-    (7, 2, 'AGR-04', 'DEMO-204', 'Autobús urbano 2022', 70, 1),
-    (8, 3, 'TCP-01', 'DEMO-301', 'Van de pasajeros 2021', 15, 1),
-    (9, 3, 'TCP-02', 'DEMO-302', 'Van de pasajeros 2022', 15, 1),
-    (10, 3, 'TCP-03', 'DEMO-303', 'Microbús 2019',        25, 1);
+INSERT INTO vehiculo (id, linea_id, numero_unidad, placa, modelo, capacidad, cuenta_con_gps, climatizado, tv_a_bordo, accesible) VALUES
+    (1, 1, 'TUC-01', 'DEMO-101', 'Autobús urbano 2019', 60, 1, 1, 0, 1),
+    (2, 1, 'TUC-02', 'DEMO-102', 'Autobús urbano 2020', 60, 1, 1, 0, 1),
+    (3, 1, 'TUC-03', 'DEMO-103', 'Microbús 2016',       30, 0, 0, 0, 0),
+    (4, 2, 'AGR-01', 'DEMO-201', 'Autobús urbano 2021', 70, 1, 1, 1, 1),
+    (5, 2, 'AGR-02', 'DEMO-202', 'Autobús urbano 2021', 70, 1, 1, 1, 1),
+    (6, 2, 'AGR-03', 'DEMO-203', 'Autobús urbano 2015', 60, 0, 0, 0, 1),
+    (7, 2, 'AGR-04', 'DEMO-204', 'Autobús urbano 2022', 70, 1, 1, 0, 1),
+    (8, 3, 'TCP-01', 'DEMO-301', 'Van de pasajeros 2021', 15, 1, 1, 1, 0),
+    (9, 3, 'TCP-02', 'DEMO-302', 'Van de pasajeros 2022', 15, 1, 1, 0, 0),
+    (10, 3, 'TCP-03', 'DEMO-303', 'Microbús 2019',        25, 1, 0, 0, 0);
 
 INSERT INTO ruta (id, linea_id, codigo, nombre, origen, destino, sentido, color, tarifa, velocidad_promedio_kmh, estado_servicio, aviso) VALUES
     (1, 1, '1', 'Tabasco 2000 – Centro', 'Planetario Tabasco 2000', 'Plaza de Armas', 'ida', '#059669', 10.00, 15.0, 'normal', NULL),
@@ -116,15 +116,15 @@ INSERT INTO recorrido (ruta_id, orden, latitud, longitud) VALUES
     (8, 1, 18.400974, -93.212598), (8, 2, 18.402061, -93.212114), (8, 3, 18.399986, -93.206631), (8, 4, 18.403655, -93.204993), (8, 5, 18.404971, -93.204776), (8, 6, 18.407099, -93.204880), (8, 7, 18.407552, -93.204659), (8, 8, 18.407852, -93.204282), (8, 9, 18.407964, -93.203945), (8, 10, 18.407914, -93.202469), (8, 11, 18.407708, -93.201234), (8, 12, 18.407668, -93.200094), (8, 13, 18.407966, -93.197845), (8, 14, 18.408273, -93.196826), (8, 15, 18.408669, -93.196337), (8, 16, 18.408929, -93.196198), (8, 17, 18.411829, -93.195045), (8, 18, 18.412975, -93.194078), (8, 19, 18.413363, -93.193443), (8, 20, 18.413547, -93.192515), (8, 21, 18.414326, -93.185416), (8, 22, 18.414607, -93.183598), (8, 23, 18.414663, -93.182461), (8, 24, 18.414019, -93.181005), (8, 25, 18.413756, -93.180245), (8, 26, 18.413597, -93.179442), (8, 27, 18.411773, -93.179965), (8, 28, 18.411755, -93.179128), (8, 29, 18.413541, -93.178611), (8, 30, 18.413229, -93.175210), (8, 31, 18.413216, -93.174630), (8, 32, 18.413388, -93.173887), (8, 33, 18.413801, -93.173259), (8, 34, 18.414187, -93.172865), (8, 35, 18.415222, -93.172119), (8, 36, 18.415895, -93.171772), (8, 37, 18.419064, -93.170777), (8, 38, 18.420154, -93.170305), (8, 39, 18.421282, -93.169698), (8, 40, 18.421558, -93.169458), (8, 41, 18.422120, -93.169363), (8, 42, 18.425013, -93.167925), (8, 43, 18.426125, -93.167509), (8, 44, 18.427835, -93.167230), (8, 45, 18.428416, -93.166908), (8, 46, 18.429388, -93.166176), (8, 47, 18.430446, -93.165665), (8, 48, 18.430624, -93.165452), (8, 49, 18.430657, -93.165100), (8, 50, 18.430793, -93.164935), (8, 51, 18.430302, -93.164181), (8, 52, 18.430463, -93.164030), (8, 53, 18.430439, -93.163861), (8, 54, 18.431327, -93.161319), (8, 55, 18.431115, -93.161013), (8, 56, 18.429589, -93.160250), (8, 57, 18.429594, -93.158371), (8, 58, 18.429426, -93.156359), (8, 59, 18.429117, -93.155386), (8, 60, 18.430194, -93.154771);
 
 -- Viajes en curso (el movimiento se simula a partir de la hora de inicio)
-INSERT INTO viaje (chofer_id, vehiculo_id, ruta_id, inicio, estado) VALUES
-    (2, 1, 1, NOW() - INTERVAL 8 MINUTE,  'en_curso'),
-    (6, 3, 5, NOW() - INTERVAL 5 MINUTE,  'en_curso'),
-    (3, 4, 2, NOW() - INTERVAL 20 MINUTE, 'en_curso'),
-    (4, 5, 3, NOW() - INTERVAL 6 MINUTE,  'en_curso'),
-    (5, 7, 4, NOW() - INTERVAL 25 MINUTE, 'en_curso'),
-    (7, 8, 6, NOW() - INTERVAL 35 MINUTE, 'en_curso'),
-    (8, 9, 7, NOW() - INTERVAL 50 MINUTE, 'en_curso'),
-    (9, 10, 8, NOW() - INTERVAL 4 MINUTE, 'en_curso');
+INSERT INTO viaje (chofer_id, vehiculo_id, ruta_id, inicio, pasajeros_salida, estado) VALUES
+    (2, 1, 1, NOW() - INTERVAL 8 MINUTE,  22, 'en_curso'),
+    (6, 3, 5, NOW() - INTERVAL 5 MINUTE,  9,  'en_curso'),
+    (3, 4, 2, NOW() - INTERVAL 20 MINUTE, 31, 'en_curso'),
+    (4, 5, 3, NOW() - INTERVAL 6 MINUTE,  NULL, 'en_curso'),
+    (5, 7, 4, NOW() - INTERVAL 25 MINUTE, 18, 'en_curso'),
+    (7, 8, 6, NOW() - INTERVAL 35 MINUTE, 5,  'en_curso'),
+    (8, 9, 7, NOW() - INTERVAL 50 MINUTE, 12, 'en_curso'),
+    (9, 10, 8, NOW() - INTERVAL 4 MINUTE, 7,  'en_curso');
 
 -- Viajes finalizados para el historial de choferes
 INSERT INTO viaje (chofer_id, vehiculo_id, ruta_id, inicio, fin, estado) VALUES
@@ -138,6 +138,13 @@ INSERT INTO viaje (chofer_id, vehiculo_id, ruta_id, inicio, fin, estado) VALUES
     (5, 7, 4, NOW() - INTERVAL 4 DAY - INTERVAL 3 HOUR,  NOW() - INTERVAL 4 DAY - INTERVAL 2 HOUR - INTERVAL 15 MINUTE, 'finalizado'),
     (7, 8, 6, NOW() - INTERVAL 1 DAY - INTERVAL 5 HOUR,  NOW() - INTERVAL 1 DAY - INTERVAL 3 HOUR - INTERVAL 25 MINUTE, 'finalizado'),
     (8, 9, 7, NOW() - INTERVAL 2 DAY - INTERVAL 6 HOUR,  NOW() - INTERVAL 2 DAY - INTERVAL 4 HOUR - INTERVAL 30 MINUTE, 'finalizado');
+
+-- Número de poste de cada parada (101, 102, …)
+UPDATE parada SET codigo = CAST(100 + id AS CHAR);
+
+INSERT INTO reporte_accidente (ruta_id, usuario_id, descripcion, contacto, estado, creado_en, revisado_por, revisado_en) VALUES
+    (4, 9, 'Choque leve entre dos autos sobre Av. Gregorio Méndez, el carril derecho está cerrado (reporte de demostración).', NULL, 'nuevo', NOW() - INTERVAL 40 MINUTE, NULL, NULL),
+    (6, NULL, 'Camión descompuesto en la carretera a la altura de Cupilco (reporte de demostración).', '933 555 0000', 'revisado', NOW() - INTERVAL 1 DAY, 11, NOW() - INTERVAL 23 HOUR);
 
 INSERT INTO historial_consulta (usuario_id, ruta_id, parada_id, consultado_en) VALUES
     (9, 1, NULL, NOW() - INTERVAL 2 DAY),

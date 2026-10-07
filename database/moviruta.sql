@@ -8,7 +8,7 @@ CREATE DATABASE IF NOT EXISTS moviruta
 USE moviruta;
 
 SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS historial_consulta, ubicacion_vehiculo, viaje, recorrido, ruta_parada,
+DROP TABLE IF EXISTS reporte_accidente, historial_consulta, ubicacion_vehiculo, viaje, recorrido, ruta_parada,
     parada, ruta, vehiculo, chofer, linea_transporte, usuario, rol;
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -62,6 +62,9 @@ CREATE TABLE vehiculo (
     modelo          VARCHAR(80) NULL,
     capacidad       SMALLINT UNSIGNED NULL,
     cuenta_con_gps  TINYINT(1) NOT NULL DEFAULT 1,
+    climatizado     TINYINT(1) NOT NULL DEFAULT 0,
+    tv_a_bordo      TINYINT(1) NOT NULL DEFAULT 0,
+    accesible       TINYINT(1) NOT NULL DEFAULT 0,   -- rampa o espacio para silla de ruedas
     activo          TINYINT(1) NOT NULL DEFAULT 1,
     UNIQUE KEY uq_vehiculo_unidad (linea_id, numero_unidad),
     CONSTRAINT fk_vehiculo_linea FOREIGN KEY (linea_id) REFERENCES linea_transporte(id)
@@ -88,6 +91,7 @@ CREATE TABLE ruta (
 -- Las paradas se comparten entre rutas (una parada puede atender varias rutas)
 CREATE TABLE parada (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    codigo      VARCHAR(10) NULL UNIQUE,              -- número del poste o letrero de la parada
     nombre      VARCHAR(120) NOT NULL,
     referencia  VARCHAR(255) NULL,
     latitud     DECIMAL(9,6) NOT NULL,
@@ -124,6 +128,8 @@ CREATE TABLE viaje (
     ruta_id      INT UNSIGNED NOT NULL,
     inicio       DATETIME NOT NULL,
     fin          DATETIME NULL,
+    pasajeros_salida  SMALLINT UNSIGNED NULL,          -- capturado por el chofer al iniciar
+
     estado       ENUM('en_curso','finalizado','cancelado') NOT NULL DEFAULT 'en_curso',
     KEY idx_viaje_estado (estado, ruta_id),
     KEY idx_viaje_chofer (chofer_id, inicio),
@@ -156,6 +162,25 @@ CREATE TABLE historial_consulta (
     CONSTRAINT fk_historial_usuario FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE,
     CONSTRAINT fk_historial_ruta    FOREIGN KEY (ruta_id)    REFERENCES ruta(id) ON DELETE CASCADE,
     CONSTRAINT fk_historial_parada  FOREIGN KEY (parada_id)  REFERENCES parada(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Accidentes reportados por usuarios; los revisa el dueño de la línea o el administrador
+CREATE TABLE reporte_accidente (
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ruta_id        INT UNSIGNED NOT NULL,
+    usuario_id     INT UNSIGNED NULL,                  -- NULL si se reportó sin iniciar sesión
+    descripcion    VARCHAR(500) NOT NULL,
+    contacto       VARCHAR(120) NULL,
+    latitud        DECIMAL(9,6) NULL,
+    longitud       DECIMAL(9,6) NULL,
+    estado         ENUM('nuevo','revisado') NOT NULL DEFAULT 'nuevo',
+    creado_en      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revisado_por   INT UNSIGNED NULL,
+    revisado_en    DATETIME NULL,
+    KEY idx_reporte_ruta (ruta_id, estado, creado_en),
+    CONSTRAINT fk_reporte_ruta     FOREIGN KEY (ruta_id)      REFERENCES ruta(id) ON DELETE CASCADE,
+    CONSTRAINT fk_reporte_usuario  FOREIGN KEY (usuario_id)   REFERENCES usuario(id) ON DELETE SET NULL,
+    CONSTRAINT fk_reporte_revisor  FOREIGN KEY (revisado_por) REFERENCES usuario(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 INSERT INTO rol (id, clave, nombre) VALUES

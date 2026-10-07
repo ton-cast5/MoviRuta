@@ -12,7 +12,7 @@
         <?php else: ?>
             <div class="table-responsive">
                 <table class="table mr-tabla table-hover">
-                    <thead><tr><th>Unidad</th><th>Línea</th><th>Placa</th><th>Modelo</th><th>Capacidad</th><th>GPS</th><th>Estado</th><th></th></tr></thead>
+                    <thead><tr><th>Unidad</th><th>Línea</th><th>Placa</th><th>Modelo</th><th>Capacidad</th><th>GPS</th><th>Equipamiento</th><th>Estado</th><th></th></tr></thead>
                     <tbody>
                     <?php foreach ($vehiculos as $v): ?>
                         <tr>
@@ -22,6 +22,12 @@
                             <td class="small"><?= e($v['modelo'] ?: '—') ?></td>
                             <td class="small"><?= $v['capacidad'] ? (int) $v['capacidad'] : '—' ?></td>
                             <td><?= (int) $v['cuenta_con_gps'] ? '<i class="bi bi-broadcast text-success" title="Con dispositivo de ubicación"></i>' : '<i class="bi bi-slash-circle text-secondary" title="Sin dispositivo de ubicación"></i>' ?></td>
+                            <td class="text-nowrap">
+                                <?php if ((int) $v['climatizado']): ?><i class="bi bi-snow2 text-primary" title="Climatizado"></i><?php endif; ?>
+                                <?php if ((int) $v['tv_a_bordo']): ?><i class="bi bi-tv text-primary" title="TV a bordo"></i><?php endif; ?>
+                                <?php if ((int) $v['accesible']): ?><i class="bi bi-person-wheelchair text-primary" title="Accesible"></i><?php endif; ?>
+                                <?php if (!(int) $v['climatizado'] && !(int) $v['tv_a_bordo'] && !(int) $v['accesible']): ?><span class="text-secondary">—</span><?php endif; ?>
+                            </td>
                             <td>
                                 <?php if (!(int) $v['activo']): ?><span class="mr-estado suspendido">Inactivo</span>
                                 <?php elseif ($v['ruta_en_curso'] !== null): ?><span class="mr-estado normal"><i class="bi bi-broadcast"></i> En ruta <?= e($v['ruta_en_curso']) ?></span>
@@ -57,6 +63,10 @@
             <div class="col-md-4"><label class="form-label" for="capacidad">Capacidad (pasajeros)</label><input class="form-control" type="number" id="capacidad" name="capacidad" value="<?= e($datos['capacidad']) ?>" min="1" max="300"></div>
             <div class="col-md-6"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="cuenta_con_gps" name="cuenta_con_gps"<?= $datos['cuenta_con_gps'] ? ' checked' : '' ?>><label class="form-check-label" for="cuenta_con_gps">Cuenta con dispositivo de ubicación (GPS)</label></div></div>
             <div class="col-md-6"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="activo" name="activo"<?= $datos['activo'] ? ' checked' : '' ?>><label class="form-check-label" for="activo">Vehículo activo</label></div></div>
+            <div class="col-12"><span class="form-label d-block mb-1">Servicio y equipamiento <span class="text-secondary small">(se muestra a los pasajeros)</span></span></div>
+            <div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="climatizado" name="climatizado"<?= $datos['climatizado'] ? ' checked' : '' ?>><label class="form-check-label" for="climatizado"><i class="bi bi-snow2"></i> Climatizado</label></div></div>
+            <div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="tv_a_bordo" name="tv_a_bordo"<?= $datos['tv_a_bordo'] ? ' checked' : '' ?>><label class="form-check-label" for="tv_a_bordo"><i class="bi bi-tv"></i> TV a bordo</label></div></div>
+            <div class="col-md-4"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="accesible" name="accesible"<?= $datos['accesible'] ? ' checked' : '' ?>><label class="form-check-label" for="accesible"><i class="bi bi-person-wheelchair"></i> Accesible (rampa o espacio para silla de ruedas)</label></div></div>
         </div>
         <div class="mt-4 d-flex gap-2">
             <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Guardar</button>

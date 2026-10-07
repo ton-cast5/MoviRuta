@@ -1,6 +1,6 @@
 <?php
 /**
- * GET api/paradas.php                       Lista de paradas (filtro opcional: q)
+ * GET api/paradas.php                       Lista de paradas (filtro opcional: q, por nombre, referencia o código "#108")
  * GET api/paradas.php?id={id}               Detalle de la parada y rutas que pasan por ella
  * GET api/paradas.php?lat=..&lng=..         Paradas cercanas a una ubicación, con sus rutas
  */
@@ -24,6 +24,7 @@ if ($id !== null) {
     responder_json([
         'parada' => [
             'id'         => (int) $parada['id'],
+            'codigo'     => $parada['codigo'],
             'nombre'     => $parada['nombre'],
             'referencia' => $parada['referencia'],
             'latitud'    => (float) $parada['latitud'],
@@ -49,6 +50,7 @@ $rutasPorParada = Ruta::porParadas(array_map(fn($p) => (int) $p['id'], $paradas)
 responder_json([
     'paradas' => array_map(fn($p) => [
         'id'             => (int) $p['id'],
+        'codigo'         => $p['codigo'] ?? null,
         'nombre'         => $p['nombre'],
         'referencia'     => $p['referencia'],
         'latitud'        => (float) $p['latitud'],

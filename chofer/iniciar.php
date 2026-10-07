@@ -17,6 +17,7 @@ if (es_post()) {
     verificar_csrf();
     $rutaId = entero_entrada($_POST, 'ruta_id');
     $vehiculoId = entero_entrada($_POST, 'vehiculo_id');
+    $pasajeros = entero_entrada($_POST, 'pasajeros_salida');
 
     // Validación en servidor: ruta y vehículo deben pertenecer a la línea del chofer y estar disponibles.
     $ruta = $rutaId ? Ruta::buscarPorId($rutaId, false) : null;
@@ -33,9 +34,13 @@ if (es_post()) {
     } elseif (Viaje::vehiculoOcupado($vehiculoId)) {
         $errores[] = 'Ese vehículo ya está en un viaje en curso. Elige otro.';
     }
+    $maxPasajeros = $vehiculo && $vehiculo['capacidad'] ? (int) $vehiculo['capacidad'] : 300;
+    if ($pasajeros === null || $pasajeros < 0 || $pasajeros > $maxPasajeros) {
+        $errores[] = "Escribe cuántos pasajeros llevas al salir (de 0 a $maxPasajeros).";
+    }
 
     if (!$errores) {
-        Viaje::iniciar($choferId, $vehiculoId, $rutaId);
+        Viaje::iniciar($choferId, $vehiculoId, $rutaId, $pasajeros);
         flash('success', 'Viaje iniciado. ¡Buen recorrido!');
         redirigir('chofer/viaje.php');
     }
@@ -72,7 +77,7 @@ require APP_ROOT . '/views/layout/panel_inicio.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="mb-4">
+            <div class="mb-3">
                 <label class="form-label" for="vehiculo_id">Vehículo</label>
                 <select class="form-select" id="vehiculo_id" name="vehiculo_id" required>
                     <option value="">Selecciona un vehículo</option>
@@ -82,6 +87,12 @@ require APP_ROOT . '/views/layout/panel_inicio.php';
                         </option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+            <div class="mb-4" style="max-width: 260px">
+                <label class="form-label" for="pasajeros_salida">Pasajeros al salir</label>
+                <input class="form-control" type="number" id="pasajeros_salida" name="pasajeros_salida" min="0" max="300" required
+                       value="<?= e($_POST['pasajeros_salida'] ?? '') ?>" inputmode="numeric">
+                <div class="form-text">Se muestra a los pasajeros como "Salió con X pasajeros".</div>
             </div>
             <button class="btn btn-primary" type="submit"><i class="bi bi-play-circle"></i> Iniciar viaje</button>
             <a class="btn btn-outline-primary" href="<?= url('chofer/') ?>">Cancelar</a>

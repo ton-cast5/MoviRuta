@@ -28,6 +28,13 @@ class Linea
         return $st->fetchAll();
     }
 
+    /** Líneas activas con teléfono de atención (pie de página). */
+    public static function telefonos(): array
+    {
+        return db()->query("SELECT nombre, telefono FROM linea_transporte
+                            WHERE activa = 1 AND telefono IS NOT NULL AND telefono <> '' ORDER BY nombre")->fetchAll();
+    }
+
     public static function buscarPorId(int $id): ?array
     {
         $st = db()->prepare('SELECT * FROM linea_transporte WHERE id = ?');

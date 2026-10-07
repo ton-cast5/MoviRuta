@@ -5,6 +5,7 @@ class Viaje
     private const SELECT_BASE = 'SELECT vj.*, r.codigo AS ruta_codigo, r.nombre AS ruta_nombre, r.sentido AS ruta_sentido,
                                         r.color AS ruta_color, r.destino AS ruta_destino, r.velocidad_promedio_kmh,
                                         v.numero_unidad, v.placa, v.cuenta_con_gps, v.linea_id,
+                                        v.climatizado, v.tv_a_bordo, v.accesible,
                                         u.nombre AS chofer_nombre, l.nombre AS linea_nombre
                                  FROM viaje vj
                                  JOIN ruta r ON r.id = vj.ruta_id
@@ -64,10 +65,10 @@ class Viaje
         return (int) $st->fetchColumn() > 0;
     }
 
-    public static function iniciar(int $choferId, int $vehiculoId, int $rutaId): int
+    public static function iniciar(int $choferId, int $vehiculoId, int $rutaId, int $pasajerosSalida): int
     {
-        db()->prepare("INSERT INTO viaje (chofer_id, vehiculo_id, ruta_id, inicio, estado) VALUES (?, ?, ?, NOW(), 'en_curso')")
-            ->execute([$choferId, $vehiculoId, $rutaId]);
+        db()->prepare("INSERT INTO viaje (chofer_id, vehiculo_id, ruta_id, inicio, pasajeros_salida, estado) VALUES (?, ?, ?, NOW(), ?, 'en_curso')")
+            ->execute([$choferId, $vehiculoId, $rutaId, $pasajerosSalida]);
         return (int) db()->lastInsertId();
     }
 

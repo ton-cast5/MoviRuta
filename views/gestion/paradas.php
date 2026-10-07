@@ -11,10 +11,11 @@
     <div class="mr-tarjeta">
         <div class="table-responsive">
             <table class="table mr-tabla table-hover">
-                <thead><tr><th>Nombre</th><th>Referencia</th><th>Rutas</th><th>Estado</th><?php if ($puedeEditar): ?><th></th><?php endif; ?></tr></thead>
+                <thead><tr><th>Código</th><th>Nombre</th><th>Referencia</th><th>Rutas</th><th>Estado</th><?php if ($puedeEditar): ?><th></th><?php endif; ?></tr></thead>
                 <tbody id="tablaParadas">
                 <?php foreach ($paradas as $p): ?>
-                    <tr data-texto="<?= e(mb_strtolower($p['nombre'] . ' ' . $p['referencia'])) ?>">
+                    <tr data-texto="<?= e(mb_strtolower($p['codigo'] . ' ' . $p['nombre'] . ' ' . $p['referencia'])) ?>">
+                        <td class="small"><?= $p['codigo'] !== null ? '#' . e($p['codigo']) : '—' ?></td>
                         <td class="fw-semibold"><?= e($p['nombre']) ?></td>
                         <td class="small"><?= e($p['referencia'] ?: '—') ?></td>
                         <td class="small"><?= (int) $p['total_rutas'] ?></td>
@@ -39,7 +40,8 @@
         <input type="hidden" id="latitud" name="latitud" value="<?= e($datos['latitud']) ?>">
         <input type="hidden" id="longitud" name="longitud" value="<?= e($datos['longitud']) ?>">
         <div class="row g-3">
-            <div class="col-md-6"><label class="form-label" for="nombre">Nombre de la parada</label><input class="form-control" id="nombre" name="nombre" value="<?= e($datos['nombre']) ?>" required maxlength="120"></div>
+            <div class="col-md-2"><label class="form-label" for="codigo">Código</label><input class="form-control text-uppercase" id="codigo" name="codigo" value="<?= e($datos['codigo']) ?>" maxlength="10" placeholder="Ej. 108"></div>
+            <div class="col-md-4"><label class="form-label" for="nombre">Nombre de la parada</label><input class="form-control" id="nombre" name="nombre" value="<?= e($datos['nombre']) ?>" required maxlength="120"></div>
             <div class="col-md-6"><label class="form-label" for="referencia">Punto de referencia</label><input class="form-control" id="referencia" name="referencia" value="<?= e($datos['referencia']) ?>" maxlength="255" placeholder="Ej. Frente al mercado, esquina con…"></div>
             <div class="col-12">
                 <label class="form-label">Ubicación</label>

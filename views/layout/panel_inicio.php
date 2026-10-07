@@ -26,6 +26,7 @@ $menus = [
         'rutas'     => ['Rutas', 'dueno/rutas.php', 'signpost-split'],
         'paradas'   => ['Paradas', 'dueno/paradas.php', 'geo-alt'],
         'ubicacion' => ['Ubicación de vehículos', 'dueno/ubicacion.php', 'broadcast'],
+        'reportes'  => ['Reportes de accidentes', 'dueno/reportes.php', 'exclamation-triangle'],
     ],
     ROL_ADMIN => [
         'inicio'    => ['Resumen', 'admin/', 'grid'],
@@ -36,6 +37,7 @@ $menus = [
         'rutas'     => ['Rutas', 'admin/rutas.php', 'signpost-split'],
         'paradas'   => ['Paradas', 'admin/paradas.php', 'geo-alt'],
         'ubicacion' => ['Ubicación de vehículos', 'admin/ubicacion.php', 'broadcast'],
+        'reportes'  => ['Reportes de accidentes', 'admin/reportes.php', 'exclamation-triangle'],
     ],
 ];
 $menu = $menus[$rolPanel] ?? [];

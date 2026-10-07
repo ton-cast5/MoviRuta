@@ -16,8 +16,10 @@ final class GestionVehiculos extends ControladorGestion
             'linea_id' => (int) $vehiculo['linea_id'], 'numero_unidad' => $vehiculo['numero_unidad'], 'placa' => $vehiculo['placa'],
             'modelo' => (string) $vehiculo['modelo'], 'capacidad' => $vehiculo['capacidad'],
             'cuenta_con_gps' => (bool) $vehiculo['cuenta_con_gps'], 'activo' => (bool) $vehiculo['activo'],
+            'climatizado' => (bool) $vehiculo['climatizado'], 'tv_a_bordo' => (bool) $vehiculo['tv_a_bordo'], 'accesible' => (bool) $vehiculo['accesible'],
         ] : ['linea_id' => count($lineasDisponibles) === 1 ? (int) $lineasDisponibles[0]['id'] : 0, 'numero_unidad' => '', 'placa' => '',
-             'modelo' => '', 'capacidad' => null, 'cuenta_con_gps' => true, 'activo' => true];
+             'modelo' => '', 'capacidad' => null, 'cuenta_con_gps' => true, 'activo' => true,
+             'climatizado' => false, 'tv_a_bordo' => false, 'accesible' => false];
 
         if ($accion !== 'lista' && es_post()) {
             verificar_csrf();
@@ -28,6 +30,9 @@ final class GestionVehiculos extends ControladorGestion
                 'modelo'         => texto_entrada($_POST, 'modelo', 80),
                 'capacidad'      => entero_entrada($_POST, 'capacidad'),
                 'cuenta_con_gps' => isset($_POST['cuenta_con_gps']),
+                'climatizado'    => isset($_POST['climatizado']),
+                'tv_a_bordo'     => isset($_POST['tv_a_bordo']),
+                'accesible'      => isset($_POST['accesible']),
                 'activo'         => isset($_POST['activo']),
             ];
             $id = $vehiculo ? (int) $vehiculo['id'] : null;

@@ -7,55 +7,50 @@ $scripts = $scripts ?? [];
 ?>
 </main>
 
-<?php if (empty($sinPie)): ?>
+<?php if (empty($sinPie)): $telefonosLineas = Linea::telefonos(); ?>
 <footer class="mr-footer">
-    <div class="container-xl">
-        <div class="row g-4">
-            <div class="col-md-6 col-lg-4">
-                <a class="mr-marca mb-2 d-inline-flex" href="<?= url() ?>">
-                    <img src="<?= asset('img/logo.svg') ?>" alt="" width="32" height="32">
-                    <span>Movi<strong>Ruta</strong></span>
-                </a>
-                <p class="small mb-0">Sistema de consulta y seguimiento del transporte público. Consulta rutas, paradas, vehículos y tiempos aproximados de llegada.</p>
-            </div>
-            <div class="col-6 col-md-3 col-lg-3">
-                <h2 class="mr-footer-titulo">Servicios y consulta</h2>
-                <ul class="list-unstyled small">
-                    <li><a href="<?= url() ?>">Planificador de trayectos</a></li>
-                    <li><a href="<?= url('rutas.php') ?>">Consulta de rutas</a></li>
-                    <li><a href="<?= url('paradas.php') ?>">Consulta de paradas</a></li>
-                    <li><a href="<?= url('mapa.php') ?>">Mapa de vehículos</a></li>
-                    <li><a href="<?= url('paradas.php?cerca=1') ?>">Paradas cercanas</a></li>
-                </ul>
-            </div>
-            <div class="col-6 col-md-3 col-lg-2">
-                <h2 class="mr-footer-titulo">Atención y soporte</h2>
-                <ul class="list-unstyled small">
-                    <li><a href="<?= url('#como-funciona') ?>">Cómo usar MoviRuta</a></li>
-                    <li><a href="<?= url('#estado-servicio') ?>">Estado del servicio</a></li>
-                    <?php if (SOPORTE_EMAIL !== ''): ?>
-                        <li><a href="mailto:<?= e(SOPORTE_EMAIL) ?>"><?= e(SOPORTE_EMAIL) ?></a></li>
-                    <?php endif; ?>
-                </ul>
-            </div>
-            <div class="col-md-6 col-lg-3">
-                <h2 class="mr-footer-titulo">Aplicación</h2>
-                <ul class="list-unstyled small">
-                    <?php if (usuario_actual()): ?>
-                        <li><a href="<?= url(panel_de_rol(usuario_actual()['rol'])) ?>">Mi panel</a></li>
-                    <?php else: ?>
-                        <li><a href="<?= url('login.php') ?>">Iniciar sesión</a></li>
-                    <?php endif; ?>
-                    <li><a href="<?= url('mapa.php') ?>">Usar mi ubicación</a></li>
-                </ul>
+    <div class="mr-footer-columnas">
+        <div class="mr-footer-columna">
+            <a class="mr-marca mr-footer-marca" href="<?= url() ?>">
+                <img src="<?= asset('img/logo.svg') ?>" alt="" width="32" height="32">
+                <span>MoviRuta</span>
+            </a>
+            <p>Sistema Integral de Información y Planificación del Transporte Público MoviRuta. Conectando personas y ciudades con certeza en tiempo real.</p>
+        </div>
+        <div class="mr-footer-columna">
+            <h2 class="mr-footer-titulo">Servicios y Consulta</h2>
+            <a href="<?= url() ?>">Planificador de Trayectos</a>
+            <a href="<?= url('rutas.php') ?>">Rutas y Líneas de Transporte</a>
+            <a href="<?= url('mapa.php') ?>">Geolocalización en Tiempo Real</a>
+            <a href="<?= url('paradas.php?cerca=1') ?>">Paradas Cercanas</a>
+            <a href="<?= url('#estado-servicio') ?>">Incidencias Programadas</a>
+        </div>
+        <div class="mr-footer-columna">
+            <h2 class="mr-footer-titulo">Atención y Soporte</h2>
+            <?php foreach ($telefonosLineas as $l): ?>
+                <p><?= e($l['nombre']) ?>: <a class="mr-footer-dato" href="tel:<?= e(preg_replace('/[^0-9+]/', '', $l['telefono'])) ?>"><?= e($l['telefono']) ?></a></p>
+            <?php endforeach; ?>
+            <?php if (SOPORTE_EMAIL !== ''): ?>
+                <p>Soporte de MoviRuta: <a class="mr-footer-dato" href="mailto:<?= e(SOPORTE_EMAIL) ?>"><?= e(SOPORTE_EMAIL) ?></a></p>
+            <?php endif; ?>
+            <a href="<?= url('?reportar=1') ?>">Reportar un Accidente</a>
+            <a href="<?= url('#estado-servicio') ?>">Estado del Servicio</a>
+        </div>
+        <div class="mr-footer-columna">
+            <h2 class="mr-footer-titulo">Usa MoviRuta en tu Teléfono</h2>
+            <p>Consulta rutas, paradas y la ubicación de las unidades desde el navegador de tu teléfono, sin instalar nada.</p>
+            <div class="mr-footer-app">
+                <i class="bi bi-phone-fill" aria-hidden="true"></i>
+                <div>
+                    <div class="mr-footer-app-etiqueta">Disponible en</div>
+                    <div class="mr-footer-app-valor">Cualquier navegador web</div>
+                </div>
             </div>
         </div>
     </div>
     <div class="mr-footer-barra">
-        <div class="container-xl d-flex flex-wrap justify-content-between gap-2">
-            <span>&copy; <?= date('Y') ?> MoviRuta</span>
-            <span><?= MAPA_MOSAICOS === 'google' ? 'Datos del mapa &copy; Google' : 'Mapas &copy; colaboradores de OpenStreetMap' ?> · Mapas con <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a></span>
-        </div>
+        <p>&copy; <?= date('Y') ?> MoviRuta. Todos los derechos reservados.</p>
+        <span><?= MAPA_MOSAICOS === 'google' ? 'Datos del mapa &copy; Google' : 'Mapas &copy; colaboradores de OpenStreetMap' ?> · Mapas con <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a></span>
     </div>
 </footer>
 <?php endif; ?>

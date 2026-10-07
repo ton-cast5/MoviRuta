@@ -226,6 +226,13 @@ function formato_fecha(?string $fecha, bool $conHora = true): string
     return $conHora ? date('d/m/Y H:i', $t) : date('d/m/Y', $t);
 }
 
+/** "10:05 a.m." */
+function formato_hora(string $fecha): string
+{
+    $t = strtotime($fecha);
+    return date('g:i', $t) . (date('A', $t) === 'AM' ? ' a.m.' : ' p.m.');
+}
+
 function formato_duracion(?string $inicio, ?string $fin): string
 {
     if (!$inicio) {

@@ -40,9 +40,10 @@ require APP_ROOT . '/views/layout/panel_inicio.php';
             <span class="mr-estado normal"><i class="bi bi-broadcast"></i> En curso</span>
         </div>
         <div class="row g-3 mt-1">
-            <div class="col-6 col-md-3 mr-dato">Inicio<strong><?= e(date('H:i', strtotime($viaje['inicio']))) ?></strong></div>
+            <div class="col-6 col-md-3 mr-dato">Salida<strong><?= e(date('H:i', strtotime($viaje['inicio']))) ?></strong></div>
             <div class="col-6 col-md-3 mr-dato">Tiempo transcurrido<strong><?= e(formato_duracion($viaje['inicio'], null)) ?></strong></div>
-            <div class="col-12 col-md-6 mr-dato">Ubicación de la unidad<strong id="estadoUbicacion">Consultando…</strong></div>
+            <div class="col-6 col-md-2 mr-dato">Pasajeros al salir<strong><?= $viaje['pasajeros_salida'] !== null ? (int) $viaje['pasajeros_salida'] : '—' ?></strong></div>
+            <div class="col-6 col-md-4 mr-dato">Ubicación de la unidad<strong id="estadoUbicacion">Consultando…</strong></div>
         </div>
     </div>
 

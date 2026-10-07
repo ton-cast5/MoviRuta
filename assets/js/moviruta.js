@@ -38,6 +38,24 @@ const MR = (() => {
         return json;
     }
 
+    /** POST de un formulario (incluye su campo csrf) a la API; devuelve el JSON o lanza el mensaje de error. */
+    async function enviar(ruta, formulario) {
+        let respuesta;
+        try {
+            respuesta = await fetch(url(`api/${ruta}`), {
+                method: 'POST', body: formulario, headers: { Accept: 'application/json' }, credentials: 'same-origin',
+            });
+        } catch (e) {
+            throw new Error('No hay conexión. Revisa tu internet e intenta nuevamente.');
+        }
+        let json = null;
+        try { json = await respuesta.json(); } catch (e) { /* respuesta no JSON */ }
+        if (!respuesta.ok) {
+            throw new Error((json && json.error) || 'No fue posible enviar la información. Intenta nuevamente.');
+        }
+        return json;
+    }
+
     /* ---------------- Texto para el usuario ---------------- */
 
     function tiempoRelativo(segundos) {
@@ -161,6 +179,14 @@ const MR = (() => {
         popupAnchor: [0, -16],
     });
 
+    const iconoDestino = () => L.divIcon({
+        className: 'mr-icono-limpio',
+        html: '<div class="mr-marcador-destino"><i class="bi bi-geo-alt-fill"></i></div>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 34],
+        popupAnchor: [0, -30],
+    });
+
     const iconoUsuario = () => L.divIcon({
         className: 'mr-icono-limpio',
         html: '<div class="mr-marcador-usuario"></div>',
@@ -175,7 +201,7 @@ const MR = (() => {
 
     /**
      * Dibuja el trazado y las paradas de una ruta.
-     * opciones: { alSeleccionarParada(parada), destacadas: [ids], ajustar: true }
+     * opciones: { alSeleccionarParada(parada), destacadas: [ids], destino: id, ajustar: true }
      */
     function dibujarRuta(mapa, detalle, opciones = {}) {
         const color = detalle.ruta.color;
@@ -190,7 +216,9 @@ const MR = (() => {
                 .addTo(grupo);
         }
         detalle.paradas.forEach((p) => {
-            const m = L.marker([p.latitud, p.longitud], { icon: iconoParada(color, destacadas.has(p.id)), title: p.nombre })
+            const esDestino = opciones.destino === p.id;
+            const icono = esDestino ? iconoDestino() : iconoParada(color, destacadas.has(p.id));
+            const m = L.marker([p.latitud, p.longitud], { icon: icono, title: p.nombre, zIndexOffset: esDestino ? 500 : 0 })
                 .bindPopup(popupParada(p))
                 .addTo(grupo);
             if (opciones.alSeleccionarParada) m.on('click', () => opciones.alSeleccionarParada(p));
@@ -205,7 +233,7 @@ const MR = (() => {
             quitar: () => mapa.removeLayer(grupo),
             destacar(ids) {
                 const set = new Set(ids);
-                marcadores.forEach((m, id) => m.setIcon(iconoParada(color, set.has(id))));
+                marcadores.forEach((m, id) => m.setIcon(opciones.destino === id ? iconoDestino() : iconoParada(color, set.has(id))));
             },
         };
     }
@@ -383,7 +411,7 @@ const MR = (() => {
     }
 
     return {
-        config, url, esc, api, tiempoRelativo, estadoVehiculo, claseEstado, iconoEstado, insigniaRuta,
+        config, url, esc, api, enviar, tiempoRelativo, estadoVehiculo, claseEstado, iconoEstado, insigniaRuta,
         crearMapa, iconoParada, iconoVehiculo, dibujarRuta, capaVehiculos, mostrarUsuario, popupParada,
         ubicarUsuario, sondeo, indicador, htmlVacio, htmlLlegadas,
     };

@@ -59,7 +59,7 @@ require APP_ROOT . '/views/layout/encabezado.php';
                             <div class="small text-secondary"><?= e($r['linea']) ?></div>
                         </div>
                     </div>
-                    <div class="mr-tramo mt-2"><?= e($r['origen']) ?> <i class="bi bi-arrow-right"></i> <?= e($r['destino']) ?></div>
+                    <div class="mr-trayecto mt-2"><?= e($r['origen']) ?> <i class="bi bi-arrow-right"></i> <?= e($r['destino']) ?></div>
                     <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
                         <span class="mr-etiqueta"><i class="bi bi-arrow-left-right"></i> <?= e(texto_sentido($r['sentido'])) ?></span>
                         <span class="mr-etiqueta"><i class="bi bi-geo-alt"></i> <?= (int) $r['total_paradas'] ?> paradas</span>

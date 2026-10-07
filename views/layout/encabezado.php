@@ -46,16 +46,16 @@ $navegacion = [
 
 <header class="mr-header sticky-top" data-bs-theme="dark">
     <nav class="navbar navbar-expand-lg" aria-label="Navegación principal">
-        <div class="container-xl">
+        <div class="mr-header-interior">
             <a class="navbar-brand mr-marca mr-marca-claro" href="<?= url() ?>">
                 <img src="<?= asset('img/logo.svg') ?>" alt="" width="36" height="36">
-                <span>Movi<strong>Ruta</strong></span>
+                <span>MoviRuta</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal" aria-controls="menuPrincipal" aria-expanded="false" aria-label="Abrir menú">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="menuPrincipal">
-                <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
+                <ul class="navbar-nav me-auto ms-lg-4 mb-2 mb-lg-0">
                     <?php foreach ($navegacion as $clave => [$texto, $destino, $icono]): ?>
                         <li class="nav-item">
                             <a class="nav-link<?= $seccion === $clave ? ' active' : '' ?>" href="<?= url($destino) ?>"<?= $seccion === $clave ? ' aria-current="page"' : '' ?>>
@@ -65,11 +65,12 @@ $navegacion = [
                     <?php endforeach; ?>
                 </ul>
                 <?php if ($usuarioSesion): ?>
-                    <div class="dropdown">
+                    <div class="dropdown d-flex align-items-center gap-2">
                         <button class="mr-btn-cuenta dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <span class="mr-avatar mr-avatar-sm" aria-hidden="true"><?= e(mb_strtoupper(mb_substr($usuarioSesion['nombre'], 0, 1))) ?></span>
+                            <span class="mr-punto-vivo" aria-hidden="true"></span>
                             <?= e(explode(' ', $usuarioSesion['nombre'])[0]) ?>
                         </button>
+                        <span class="mr-avatar mr-avatar-cabecera" aria-hidden="true"><?= e(mb_strtoupper(mb_substr($usuarioSesion['nombre'], 0, 1))) ?></span>
                         <ul class="dropdown-menu dropdown-menu-end" data-bs-theme="light">
                             <li><h6 class="dropdown-header"><?= e(nombre_rol($usuarioSesion['rol'])) ?></h6></li>
                             <li><a class="dropdown-item" href="<?= url(panel_de_rol($usuarioSesion['rol'])) ?>"><i class="bi bi-grid me-2"></i>Mi panel</a></li>
@@ -83,7 +84,10 @@ $navegacion = [
                         </ul>
                     </div>
                 <?php else: ?>
-                    <a class="mr-btn-cuenta" href="<?= url('login.php') ?>"><span class="mr-punto-vivo" aria-hidden="true"></span> Iniciar sesión</a>
+                    <div class="d-flex align-items-center gap-2">
+                        <a class="mr-btn-cuenta" href="<?= url('login.php') ?>"><span class="mr-punto-vivo" aria-hidden="true"></span> Agregar cuenta</a>
+                        <a class="mr-avatar mr-avatar-cabecera mr-avatar-invitado" href="<?= url('login.php') ?>" title="Iniciar sesión"><i class="bi bi-person-fill" aria-hidden="true"></i><span class="visually-hidden">Iniciar sesión</span></a>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -92,7 +96,7 @@ $navegacion = [
 
 <main id="contenido">
 <?php $mensajesFlash = obtener_flash(); if ($mensajesFlash): ?>
-    <div class="container-xl pt-3">
+    <div class="mr-contenedor pt-3">
         <?php foreach ($mensajesFlash as $m): ?>
             <div class="alert alert-<?= e($m['tipo']) ?> alert-dismissible fade show" role="alert">
                 <?= e($m['mensaje']) ?>

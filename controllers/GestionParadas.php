@@ -21,19 +21,22 @@ final class GestionParadas extends ControladorGestion
             }
         }
         $datos = $parada ? [
-            'nombre' => $parada['nombre'], 'referencia' => (string) $parada['referencia'],
+            'codigo' => (string) $parada['codigo'], 'nombre' => $parada['nombre'], 'referencia' => (string) $parada['referencia'],
             'latitud' => (float) $parada['latitud'], 'longitud' => (float) $parada['longitud'], 'activa' => (bool) $parada['activa'],
-        ] : ['nombre' => '', 'referencia' => '', 'latitud' => null, 'longitud' => null, 'activa' => true];
+        ] : ['codigo' => '', 'nombre' => '', 'referencia' => '', 'latitud' => null, 'longitud' => null, 'activa' => true];
 
         if ($accion !== 'lista' && es_post()) {
             verificar_csrf();
             $datos = [
+                'codigo'     => mb_strtoupper(ltrim(texto_entrada($_POST, 'codigo', 11), '#')),
                 'nombre'     => texto_entrada($_POST, 'nombre', 120),
                 'referencia' => texto_entrada($_POST, 'referencia', 255),
                 'latitud'    => decimal_entrada($_POST, 'latitud'),
                 'longitud'   => decimal_entrada($_POST, 'longitud'),
                 'activa'     => $puedeEditarExistentes ? isset($_POST['activa']) : true,
             ];
+            if ($datos['codigo'] !== '' && !preg_match('/^[A-Z0-9\-]{1,10}$/', $datos['codigo'])) $errores[] = 'El código de la parada solo puede tener letras, números o guiones (máximo 10).';
+            elseif ($datos['codigo'] !== '' && Parada::codigoEnUso($datos['codigo'], $parada ? (int) $parada['id'] : null)) $errores[] = 'Ese código ya lo tiene otra parada.';
             if (mb_strlen($datos['nombre']) < 3) $errores[] = 'Escribe el nombre de la parada.';
             if (!coordenadas_validas($datos['latitud'], $datos['longitud'])) $errores[] = 'Marca la ubicación de la parada en el mapa.';
 

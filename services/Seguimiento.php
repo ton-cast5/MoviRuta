@@ -48,10 +48,15 @@ final class Seguimiento
                 'longitud'             => $u['longitud'] ?? null,
                 'actualizado_hace_seg' => $u ? max(0, $ahora - $u['actualizado_en']) : null,
                 'proxima_parada'       => $u ? self::proximaParada($v, (float) $u['latitud'], (float) $u['longitud']) : null,
+                'chofer'               => $v['chofer_nombre'],
+                'hora_salida'          => formato_hora($v['inicio']),
+                'pasajeros_salida'     => $v['pasajeros_salida'] !== null ? (int) $v['pasajeros_salida'] : null,
+                'climatizado'          => (bool) $v['climatizado'],
+                'tv_a_bordo'           => (bool) $v['tv_a_bordo'],
+                'accesible'            => (bool) $v['accesible'],
             ];
             if ($detalleGestion) {
                 $item['placa'] = $v['placa'];
-                $item['chofer'] = $v['chofer_nombre'];
                 $item['inicio'] = formato_fecha($v['inicio']);
             }
             $vehiculos[] = $item;

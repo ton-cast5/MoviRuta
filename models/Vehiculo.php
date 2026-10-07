@@ -40,6 +40,15 @@ class Vehiculo
         return $st->fetchAll();
     }
 
+    /** @return int[] líneas activas cuyas unidades activas son todas accesibles (y tienen al menos una). */
+    public static function lineasTotalmenteAccesibles(): array
+    {
+        return array_map('intval', db()->query('SELECT v.linea_id FROM vehiculo v
+                                                WHERE v.activo = 1
+                                                GROUP BY v.linea_id
+                                                HAVING MIN(v.accesible) = 1')->fetchAll(PDO::FETCH_COLUMN));
+    }
+
     public static function placaEnUso(string $placa, ?int $exceptoId = null): bool
     {
         $st = db()->prepare('SELECT COUNT(*) FROM vehiculo WHERE placa = ? AND id <> ?');
@@ -57,15 +66,17 @@ class Vehiculo
     public static function guardar(?int $id, array $d): int
     {
         $valores = [$d['linea_id'], $d['numero_unidad'], $d['placa'], $d['modelo'] ?: null, $d['capacidad'],
-                    $d['cuenta_con_gps'] ? 1 : 0, $d['activo'] ? 1 : 0];
+                    $d['cuenta_con_gps'] ? 1 : 0, $d['climatizado'] ? 1 : 0, $d['tv_a_bordo'] ? 1 : 0, $d['accesible'] ? 1 : 0,
+                    $d['activo'] ? 1 : 0];
         if ($id) {
             $st = db()->prepare('UPDATE vehiculo SET linea_id = ?, numero_unidad = ?, placa = ?, modelo = ?, capacidad = ?,
-                                        cuenta_con_gps = ?, activo = ? WHERE id = ?');
+                                        cuenta_con_gps = ?, climatizado = ?, tv_a_bordo = ?, accesible = ?, activo = ? WHERE id = ?');
             $st->execute([...$valores, $id]);
             return $id;
         }
-        $st = db()->prepare('INSERT INTO vehiculo (linea_id, numero_unidad, placa, modelo, capacidad, cuenta_con_gps, activo)
-                             VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $st = db()->prepare('INSERT INTO vehiculo (linea_id, numero_unidad, placa, modelo, capacidad, cuenta_con_gps,
+                                                   climatizado, tv_a_bordo, accesible, activo)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $st->execute($valores);
         return (int) db()->lastInsertId();
     }

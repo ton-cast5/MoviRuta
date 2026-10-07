@@ -209,6 +209,7 @@ const MR = (() => {
         const marcadores = new Map();
         const destacadas = new Set(opciones.destacadas || []);
 
+        registrarRecorrido(detalle.ruta.id, detalle.recorrido);
         if (detalle.recorrido.length > 1) {
             L.polyline(detalle.recorrido, { color: '#000', weight: 9, opacity: 0.22, lineJoin: 'round', interactive: false }).addTo(grupo);
             L.polyline(detalle.recorrido, { color, weight: 6, opacity: 1, lineJoin: 'round' })
@@ -238,42 +239,217 @@ const MR = (() => {
         };
     }
 
-    /** Capa de vehículos que se actualiza moviendo marcadores existentes en lugar de recrearlos. */
-    function capaVehiculos(mapa) {
-        const marcadores = new Map();
+    /* ---------------- Recorridos para animar las unidades sobre la calle ---------------- */
+
+    /** rutaId → { puntos: [[lat,lng]], acumulado: [m], total, circular } */
+    const recorridos = new Map();
+    const recorridosPendientes = new Map();
+    const METROS_GRADO_LAT = 110540;
+
+    function registrarRecorrido(rutaId, puntos) {
+        if (!rutaId || recorridos.has(rutaId) || !puntos || puntos.length < 2) return;
+        const acumulado = [0];
+        for (let i = 1; i < puntos.length; i++) {
+            acumulado.push(acumulado[i - 1] + L.latLng(puntos[i - 1]).distanceTo(puntos[i]));
+        }
+        const total = acumulado[acumulado.length - 1];
+        const circular = L.latLng(puntos[0]).distanceTo(puntos[puntos.length - 1]) < 80;
+        recorridos.set(rutaId, { puntos, acumulado, total, circular });
+    }
+
+    /** Descarga una sola vez el trazado de las rutas cuyas unidades aparecen en un mapa sin la ruta dibujada. */
+    function asegurarRecorrido(rutaId) {
+        if (recorridos.has(rutaId) || recorridosPendientes.has(rutaId)) return;
+        recorridosPendientes.set(rutaId, api('rutas.php', { id: rutaId })
+            .then((d) => registrarRecorrido(rutaId, d.recorrido))
+            .catch(() => recorridosPendientes.delete(rutaId)));
+    }
+
+    /** Distancia sobre el recorrido del punto más cercano a p, y qué tan lejos queda p del trazado. */
+    function proyectar(rec, p) {
+        const kx = Math.cos(p.lat * Math.PI / 180) * 111320;
+        let mejor = { dist: Infinity, sobre: 0 };
+        for (let i = 1; i < rec.puntos.length; i++) {
+            const [alat, alng] = rec.puntos[i - 1];
+            const [blat, blng] = rec.puntos[i];
+            const ax = (alng - p.lng) * kx, ay = (alat - p.lat) * METROS_GRADO_LAT;
+            const bx = (blng - p.lng) * kx, by = (blat - p.lat) * METROS_GRADO_LAT;
+            const dx = bx - ax, dy = by - ay;
+            const largo2 = dx * dx + dy * dy;
+            const t = largo2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / largo2)) : 0;
+            const cx = ax + t * dx, cy = ay + t * dy;
+            const dist = Math.hypot(cx, cy);
+            if (dist < mejor.dist) mejor = { dist, sobre: rec.acumulado[i - 1] + t * (rec.acumulado[i] - rec.acumulado[i - 1]) };
+        }
+        return mejor;
+    }
+
+    function puntoEn(rec, metros) {
+        const d = ((metros % rec.total) + rec.total) % rec.total;
+        let bajo = 1, alto = rec.acumulado.length - 1;
+        while (bajo < alto) {
+            const medio = (bajo + alto) >> 1;
+            if (rec.acumulado[medio] < d) bajo = medio + 1; else alto = medio;
+        }
+        const tramo = rec.acumulado[bajo] - rec.acumulado[bajo - 1];
+        const t = tramo ? (d - rec.acumulado[bajo - 1]) / tramo : 0;
+        const [alat, alng] = rec.puntos[bajo - 1];
+        const [blat, blng] = rec.puntos[bajo];
+        return L.latLng(alat + (blat - alat) * t, alng + (blng - alng) * t);
+    }
+
+    /**
+     * Capa de vehículos con movimiento continuo.
+     * Con el recorrido de la ruta, la unidad avanza sobre la calle a la velocidad medida entre sus dos últimos
+     * reportes de ubicación; cada reporte nuevo corrige la posición suavemente y nunca la hace retroceder.
+     * Sin recorrido (o fuera de él) se desliza en línea recta hacia la nueva posición.
+     * opciones: { alMover(vehiculoId, latLng) } se llama en cada cuadro en que la unidad se mueve.
+     */
+    function capaVehiculos(mapa, opciones = {}) {
+        const estados = new Map();
         const grupo = L.layerGroup().addTo(mapa);
+        const MAX_PREDICCION_MS = config.actualizacionMs * 2;
+        const SUAVIZADO_MS = 1000;
+        const TOLERANCIA_TRAZADO_M = 60;
+        const VELOCIDAD_MAX_M_MS = 0.04; // 144 km/h
+        let cuadro = null;
+        let cuadroAnterior = 0;
+
+        const notificar = (id, pos) => { if (opciones.alMover) opciones.alMover(id, pos); };
+        const modulo = (d, total) => ((d % total) + total) % total;
+        /** Diferencia a − b sobre un recorrido de longitud total, en el rango (−total/2, total/2]. */
+        const diferenciaCircular = (a, b, total) => modulo(a - b + total / 2, total) - total / 2;
+
+        function animar(ahora) {
+            const paso = Math.min(250, ahora - (cuadroAnterior || ahora));
+            cuadroAnterior = ahora;
+            estados.forEach((e, id) => {
+                const rec = recorridos.get(e.rutaId);
+                if (e.distancia !== null && rec) {
+                    let prevista = e.ultimo.sobre + e.velocidad * Math.min(ahora - e.ultimo.t, MAX_PREDICCION_MS);
+                    if (!rec.circular) prevista = Math.min(prevista, rec.total);
+                    const error = prevista - e.distancia;
+                    if (error < -150) {
+                        e.distancia = prevista;
+                    } else {
+                        // Velocidad medida más una corrección proporcional; si va un poco adelantada solo se frena.
+                        let rapidez = e.velocidad + error / SUAVIZADO_MS;
+                        if (e.velocidad > 0 && error > -40) rapidez = Math.max(rapidez, e.velocidad * 0.5);
+                        if (rapidez <= 0 || (e.velocidad === 0 && error < 0.05)) return;
+                        e.distancia += rapidez * paso;
+                        if (!rec.circular) e.distancia = Math.min(e.distancia, rec.total);
+                    }
+                    const pos = puntoEn(rec, e.distancia);
+                    e.m.setLatLng(pos);
+                    notificar(id, pos);
+                } else if (e.tween) {
+                    const t = Math.min(1, (ahora - e.tween.inicio) / e.tween.duracion);
+                    const { desde, hasta } = e.tween;
+                    const pos = L.latLng(desde.lat + (hasta.lat - desde.lat) * t, desde.lng + (hasta.lng - desde.lng) * t);
+                    e.m.setLatLng(pos);
+                    notificar(id, pos);
+                    if (t >= 1) e.tween = null;
+                }
+            });
+            cuadro = estados.size ? requestAnimationFrame(animar) : null;
+        }
+
+        const iniciarAnimacion = () => { if (!cuadro) { cuadroAnterior = 0; cuadro = requestAnimationFrame(animar); } };
+
+        function saltar(e, id, pos, sobre) {
+            e.m.setLatLng(pos);
+            e.velocidad = 0;
+            e.tween = null;
+            e.distancia = sobre;
+            notificar(id, pos);
+        }
+
+        /** Procesa un reporte de ubicación (posición + momento en que se tomó). */
+        function reportar(id, e, rutaId, pos, t) {
+            if (Math.abs(t - e.ultimo.t) < 1500 && pos.distanceTo(e.ultimo.pos) < 1) return;
+            const rec = recorridos.get(rutaId);
+            const proyeccion = rec ? proyectar(rec, pos) : null;
+            const sobreTrazado = proyeccion && proyeccion.dist <= TOLERANCIA_TRAZADO_M;
+            const mismaRuta = e.rutaId === rutaId;
+            const dt = t - e.ultimo.t;
+            e.rutaId = rutaId;
+
+            if (!sobreTrazado) {
+                const desde = e.m.getLatLng();
+                e.distancia = null;
+                e.ultimo = { t, pos, sobre: null };
+                if (!mismaRuta || dt <= 0 || desde.distanceTo(pos) > 5000) { saltar(e, id, pos, null); return; }
+                e.tween = { desde, hasta: pos, inicio: performance.now(), duracion: Math.min(Math.max(dt, 1000), config.actualizacionMs * 3) };
+                return;
+            }
+
+            if (!mismaRuta || e.ultimo.sobre === null) {
+                e.ultimo = { t, pos, sobre: proyeccion.sobre };
+                const actual = proyectar(rec, e.m.getLatLng());
+                if (actual.dist > TOLERANCIA_TRAZADO_M || !mismaRuta) saltar(e, id, pos, proyeccion.sobre);
+                else { e.distancia = proyeccion.sobre + diferenciaCircular(actual.sobre, proyeccion.sobre, rec.total); e.velocidad = 0; e.tween = null; }
+                return;
+            }
+
+            let avance = proyeccion.sobre - modulo(e.ultimo.sobre, rec.total);
+            if (rec.circular && avance < -rec.total / 2) avance += rec.total;
+            if (avance < -50 || avance > 5000 || dt > MAX_PREDICCION_MS * 3) {
+                e.ultimo = { t, pos, sobre: proyeccion.sobre };
+                saltar(e, id, pos, proyeccion.sobre);
+                return;
+            }
+            avance = Math.max(0, avance);
+            const sobre = e.ultimo.sobre + avance;
+            e.velocidad = dt > 0 ? Math.min(avance / dt, VELOCIDAD_MAX_M_MS) : 0;
+            e.distancia = e.distancia === null ? sobre : sobre + diferenciaCircular(e.distancia, sobre, rec.total);
+            e.ultimo = { t, pos, sobre };
+        }
+
         return {
             grupo,
             actualizar(vehiculos) {
+                const ahora = performance.now();
                 const vigentes = new Set();
                 vehiculos.forEach((v) => {
                     if (!v.con_ubicacion) return;
-                    vigentes.add(v.vehiculo_id);
+                    const id = v.vehiculo_id;
+                    vigentes.add(id);
+                    asegurarRecorrido(v.ruta_id);
                     const contenido = `<strong>Unidad ${esc(v.unidad)}</strong><br>
                         Ruta ${esc(v.ruta_codigo)} · ${esc(v.ruta_nombre)} (${esc(v.ruta_sentido)})<br>
                         Hacia ${esc(v.destino)}${v.chofer ? `<br>Chofer: ${esc(v.chofer)}` : ''}<br>
                         <span class="text-secondary small">${estadoVehiculo(v)}</span>`;
-                    let m = marcadores.get(v.vehiculo_id);
-                    if (m) {
-                        m.setLatLng([v.latitud, v.longitud]);
-                        m.setPopupContent(contenido);
-                    } else {
-                        m = L.marker([v.latitud, v.longitud], { icon: iconoVehiculo(v.ruta_color), zIndexOffset: 1000, title: `Unidad ${v.unidad}` })
-                            .bindPopup(contenido)
-                            .addTo(grupo);
-                        marcadores.set(v.vehiculo_id, m);
+                    const pos = L.latLng(v.latitud, v.longitud);
+                    const t = ahora - (v.actualizado_hace_seg || 0) * 1000;
+                    const e = estados.get(id);
+                    if (e) {
+                        reportar(id, e, v.ruta_id, pos, t);
+                        e.m.setPopupContent(contenido);
+                        return;
                     }
+                    const m = L.marker(pos, { icon: iconoVehiculo(v.ruta_color), zIndexOffset: 1000, title: `Unidad ${v.unidad}` })
+                        .bindPopup(contenido)
+                        .addTo(grupo);
+                    const rec = recorridos.get(v.ruta_id);
+                    const proyeccion = rec ? proyectar(rec, pos) : null;
+                    const sobre = proyeccion && proyeccion.dist <= TOLERANCIA_TRAZADO_M ? proyeccion.sobre : null;
+                    estados.set(id, { m, rutaId: v.ruta_id, ultimo: { t, pos, sobre }, velocidad: 0, distancia: sobre, tween: null });
                 });
-                marcadores.forEach((m, id) => {
+                estados.forEach((e, id) => {
                     if (!vigentes.has(id)) {
-                        grupo.removeLayer(m);
-                        marcadores.delete(id);
+                        grupo.removeLayer(e.m);
+                        estados.delete(id);
                     }
                 });
+                if (estados.size) iniciarAnimacion();
+            },
+            posicion(vehiculoId) {
+                const e = estados.get(vehiculoId);
+                return e ? e.m.getLatLng() : null;
             },
             enfocar(vehiculoId) {
-                const m = marcadores.get(vehiculoId);
-                if (m) { mapa.setView(m.getLatLng(), Math.max(mapa.getZoom(), 15)); m.openPopup(); }
+                const e = estados.get(vehiculoId);
+                if (e) { mapa.setView(e.m.getLatLng(), Math.max(mapa.getZoom(), 15)); e.m.openPopup(); }
             },
         };
     }

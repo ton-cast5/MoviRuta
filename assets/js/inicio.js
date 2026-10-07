@@ -5,7 +5,12 @@
 (() => {
     const TEXTO_REPOSO = 'Selecciona una ruta para ver sus unidades en el mapa.';
     const mapa = MR.crearMapa('mapa');
-    const capaVehiculos = MR.capaVehiculos(mapa);
+    const capaVehiculos = MR.capaVehiculos(mapa, {
+        alMover: (id, posicion) => {
+            const v = flota.lista[flota.indice];
+            if (flota.siguiendo && v && v.vehiculo_id === id) mapa.panTo(posicion, { animate: false });
+        },
+    });
     const indicador = MR.indicador(document.getElementById('indicador'));
     const $ = (id) => document.getElementById(id);
     const contenedor = $('resultados');
@@ -414,7 +419,9 @@
 
     function seguirActual() {
         const v = flota.lista[flota.indice];
-        if (v) mapa.setView([v.latitud, v.longitud], Math.max(mapa.getZoom(), 16));
+        if (!v) return;
+        const posicion = capaVehiculos.posicion(v.vehiculo_id) || L.latLng(v.latitud, v.longitud);
+        if (mapa.getZoom() < 16) mapa.setView(posicion, 16); else mapa.panTo(posicion, { animate: false });
     }
 
     function alternarSeguir(reencuadrar = true) {

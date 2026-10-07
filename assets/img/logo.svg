@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MoviRuta">
+  <rect width="64" height="64" rx="16" fill="#065F46"/>
+  <path d="M14 46c8-2 10-12 18-14s12-10 18-14" fill="none" stroke="#10B981" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 9"/>
+  <path d="M32 12c-7.2 0-13 5.6-13 12.6C19 34 32 48 32 48s13-14 13-23.4C45 17.6 39.2 12 32 12z" fill="#10B981"/>
+  <circle cx="32" cy="24.5" r="5.2" fill="#F8FAFC"/>
+</svg>

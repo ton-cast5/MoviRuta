@@ -17,6 +17,11 @@
     const btnVistaRuta = document.getElementById('btnVistaRuta');
     const btnVistaParadas = document.getElementById('btnVistaParadas');
     const panel = document.getElementById('panelVehiculo');
+    const tarjetaMapa = panel.parentElement;
+    new ResizeObserver(() => {
+        const ocupa = panel.offsetHeight ? tarjetaMapa.clientHeight - panel.offsetTop + 8 : 0;
+        tarjetaMapa.style.setProperty('--mr-flota-ocupa', `${ocupa}px`);
+    }).observe(panel);
 
     const detalles = new Map();
     let capaParadas = null;

@@ -8,7 +8,7 @@ const MR = (() => {
         base: datos.base || '',
         centro: [parseFloat(datos.mapaLat), parseFloat(datos.mapaLng)],
         zoom: parseInt(datos.mapaZoom, 10) || 13,
-        mosaicos: datos.mapaMosaicos || 'osm',
+        mosaicos: datos.mapaMosaicos || 'google',
         actualizacionMs: (parseInt(datos.actualizacion, 10) || 15) * 1000,
     };
 
@@ -68,22 +68,80 @@ const MR = (() => {
 
     /* ---------------- Mapa ---------------- */
 
+    const ANIO = new Date().getFullYear();
+    const ESCALA_GOOGLE = L.Browser.retina ? 2 : 1;
+    const urlGoogle = (capa) => `https://mt{s}.google.com/vt/lyrs=${capa}&hl=es-419&gl=MX&scale=${ESCALA_GOOGLE}&x={x}&y={y}&z={z}`;
+
+    /** Tipos de mapa: [plantilla, opciones de L.tileLayer, nombre visible]. */
     const MOSAICOS = {
-        google: ['https://mt{s}.google.com/vt/lyrs=m&hl=es&x={x}&y={y}&z={z}', {
-            subdomains: ['0', '1', '2', '3'],
-            maxZoom: 20,
-            attribution: 'Datos del mapa &copy; Google',
-        }],
-        osm: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        }],
+        google: {
+            mapa: [urlGoogle('m'), { subdomains: '0123', maxZoom: 21, attribution: `Datos del mapa &copy;${ANIO} Google` }, 'Mapa'],
+            satelite: [urlGoogle('y'), { subdomains: '0123', maxZoom: 20, attribution: `Imágenes y datos del mapa &copy;${ANIO} Google` }, 'Satélite'],
+        },
+        osm: {
+            mapa: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            }, 'Mapa'],
+        },
     };
 
+    /** Miniatura del otro tipo de mapa (esquina inferior izquierda), como en Google Maps. */
+    const ControlTipoMapa = L.Control.extend({
+        options: { position: 'bottomleft' },
+        initialize(capas, options) {
+            L.setOptions(this, options);
+            this.capas = capas;
+            this.actual = 'mapa';
+        },
+        onAdd(mapa) {
+            this.mapa = mapa;
+            const boton = this.boton = L.DomUtil.create('button', 'mr-tipo-mapa');
+            boton.type = 'button';
+            boton.innerHTML = '<span class="mr-tipo-mapa-nombre"></span>';
+            L.DomEvent.disableClickPropagation(boton);
+            L.DomEvent.on(boton, 'click', this.alternar, this);
+            mapa.on('moveend', this.pintar, this);
+            this.pintar();
+            return boton;
+        },
+        onRemove(mapa) { mapa.off('moveend', this.pintar, this); },
+        otro() { return this.actual === 'mapa' ? 'satelite' : 'mapa'; },
+        alternar() {
+            const siguiente = this.otro();
+            this.mapa.removeLayer(this.capas[this.actual]);
+            this.capas[siguiente].addTo(this.mapa).bringToBack();
+            this.actual = siguiente;
+            this.pintar();
+        },
+        pintar() {
+            const capa = this.capas[this.otro()];
+            const z = Math.max(3, Math.min(Math.round(this.mapa.getZoom()) - 1, 18));
+            const t = this.mapa.project(this.mapa.getCenter(), z).divideBy(256).floor();
+            const urlMiniatura = L.Util.template(capa.options.plantilla, { s: String(Math.abs(t.x + t.y) % 4), x: t.x, y: t.y, z });
+            this.boton.style.backgroundImage = `url("${urlMiniatura}")`;
+            this.boton.querySelector('.mr-tipo-mapa-nombre').textContent = capa.options.nombre;
+            this.boton.title = `Mostrar ${capa.options.nombre.toLowerCase()}`;
+        },
+    });
+
     function crearMapa(id, opciones = {}) {
-        const mapa = L.map(id, { scrollWheelZoom: opciones.scrollWheelZoom ?? true }).setView(config.centro, config.zoom);
-        const [plantilla, ajustes] = MOSAICOS[config.mosaicos] || MOSAICOS.osm;
-        L.tileLayer(plantilla, ajustes).addTo(mapa);
+        const mapa = L.map(id, {
+            scrollWheelZoom: opciones.scrollWheelZoom ?? true,
+            zoomControl: false,
+        }).setView(config.centro, config.zoom);
+        mapa.attributionControl.setPrefix(false);
+
+        const tipos = MOSAICOS[config.mosaicos] || MOSAICOS.google;
+        const capas = {};
+        Object.entries(tipos).forEach(([clave, [plantilla, ajustes, nombre]]) => {
+            capas[clave] = L.tileLayer(plantilla, { ...ajustes, nombre, plantilla });
+        });
+        capas.mapa.addTo(mapa);
+        mapa.getContainer().classList.add('mr-mapa-google');
+
+        L.control.zoom({ position: 'bottomright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(mapa);
+        if (capas.satelite) new ControlTipoMapa(capas).addTo(mapa);
         return mapa;
     }
 
@@ -126,7 +184,8 @@ const MR = (() => {
         const destacadas = new Set(opciones.destacadas || []);
 
         if (detalle.recorrido.length > 1) {
-            L.polyline(detalle.recorrido, { color, weight: 6, opacity: 0.85, lineJoin: 'round' })
+            L.polyline(detalle.recorrido, { color: '#000', weight: 9, opacity: 0.22, lineJoin: 'round', interactive: false }).addTo(grupo);
+            L.polyline(detalle.recorrido, { color, weight: 6, opacity: 1, lineJoin: 'round' })
                 .bindTooltip(`Ruta ${detalle.ruta.codigo} · ${detalle.ruta.nombre}`, { sticky: true })
                 .addTo(grupo);
         }

@@ -36,7 +36,7 @@ Contraseña de todas: `moviruta123`
 
 ### Mapa
 
-`MAPA_MOSAICOS` en `config/config.local.php` elige el fondo del mapa: `'google'` (predeterminado) u `'osm'` (OpenStreetMap). Leaflet sigue siendo la librería del mapa en ambos casos. Los mosaicos de Google se cargan directamente desde sus servidores sin clave de API; las condiciones de uso de Google piden usar su API oficial, así que para un despliegue público conviene cambiar a `'osm'` o contratar la API.
+`MAPA_MOSAICOS` en `config/config.local.php` elige el fondo del mapa: `'google'` (predeterminado) u `'osm'` (OpenStreetMap). Con `'google'` los mapas imitan la interfaz de Google Maps (zoom abajo a la derecha, miniatura para cambiar entre **Mapa** y **Satélite**, ventanas emergentes y atribución al estilo de Google, y mosaicos en alta resolución en pantallas retina). Leaflet sigue siendo la librería del mapa en ambos casos. Los mosaicos de Google se cargan directamente desde sus servidores sin clave de API; las condiciones de uso de Google piden usar su API oficial, así que para un despliegue público conviene cambiar a `'osm'` o contratar la API.
 
 ---
 

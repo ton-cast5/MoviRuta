@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MoviRuta · Consulta y planifica tus trayectos en tiempo real</title>
+    <meta name="description" content="Consulta rutas, paradas y la ubicación de las unidades de transporte público en tiempo real.">
+    <meta name="theme-color" content="#004532">
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="assets/css/moviruta.css">
+</head>
+<body class="bg-surface font-sans text-on-surface" data-base="." data-pagina="inicio">
+<a class="saltar-contenido" href="#contenido">Saltar al contenido</a>
+<div id="mr-encabezado" class="fixed inset-x-0 top-0 z-[1500] h-20 bg-primary"></div>
+
+<main id="contenido" class="pt-20">
+    <!-- ============ Portada con planificador ============ -->
+    <section class="relative overflow-hidden bg-primary pb-36 pt-10 lg:pb-40 lg:pt-14" data-oculto-impresion aria-label="Planificador de trayectos">
+        <div class="mr-hero-rejilla"></div>
+        <div class="mr-hero-luz uno -right-24 -top-48 h-[30rem] w-[30rem] bg-secondary/30 blur-[100px]"></div>
+        <div class="mr-hero-luz dos -bottom-24 left-[8%] h-80 w-80 bg-primary-container/70 blur-[80px]"></div>
+        <svg class="mr-hero-trazo hidden md:block" viewBox="0 0 1440 520" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <path id="trazoPortada" d="M760 470 C 900 380, 960 420, 1050 330 S 1200 160, 1300 190 S 1420 120, 1500 60" fill="none" stroke="rgba(108,248,187,.22)" stroke-width="10" stroke-linecap="round"/>
+            <path class="flujo" d="M760 470 C 900 380, 960 420, 1050 330 S 1200 160, 1300 190 S 1420 120, 1500 60" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2.5" stroke-linecap="round"/>
+            <g fill="#004532" stroke="#6cf8bb" stroke-width="4">
+                <circle cx="1050" cy="330" r="8"/><circle cx="1300" cy="190" r="8"/>
+            </g>
+            <g>
+                <circle r="13" fill="#6cf8bb" opacity=".35"><animate attributeName="r" values="10;20;10" dur="2s" repeatCount="indefinite"/></circle>
+                <circle r="8" fill="#6cf8bb"/>
+                <animateMotion dur="14s" repeatCount="indefinite" rotate="auto"><mpath href="#trazoPortada"/></animateMotion>
+            </g>
+        </svg>
+        <div class="relative mx-auto max-w-[1440px] px-margin md:px-margin-tablet lg:px-margin-desktop">
+            <div class="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+                <div class="max-w-3xl">
+                    <span class="mr-anim-subir inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-label-sm font-label-sm uppercase tracking-widest text-secondary-container ring-1 ring-white/15">
+                        <span class="mr-ping"></span> Información en tiempo real
+                    </span>
+                    <h1 class="mr-anim-subir mt-5 font-headline-xl-mobile text-headline-xl-mobile text-white md:font-headline-xl md:text-headline-xl lg:text-[48px] lg:leading-[56px]" style="--retraso:90ms">
+                        Consulta y planifica tus trayectos en <span class="bg-gradient-to-r from-secondary-container to-primary-fixed bg-clip-text text-transparent">tiempo real</span>
+                    </h1>
+                    <p class="mr-anim-subir mt-3 max-w-xl font-body-lg text-body-lg text-on-primary-container" style="--retraso:180ms">Encuentra las mejores rutas para planificar tu traslado.</p>
+                </div>
+                <div class="mr-metrica-vivo mr-anim-escala grid grid-cols-3 divide-x divide-white/10 rounded-2xl px-2 py-4 text-white shadow-2xl" style="--retraso:260ms" aria-label="Resumen del servicio">
+                    <div class="px-4 text-center">
+                        <p class="text-[28px] font-extrabold leading-none text-secondary-container" data-contar="0" id="metricaUnidades">0</p>
+                        <p class="mt-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/70">Unidades<br>en circulación</p>
+                    </div>
+                    <div class="px-4 text-center">
+                        <p class="text-[28px] font-extrabold leading-none" data-contar="0" id="metricaRutas">0</p>
+                        <p class="mt-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/70">Rutas<br>activas</p>
+                    </div>
+                    <div class="px-4 text-center">
+                        <p class="text-[28px] font-extrabold leading-none" data-contar="0" id="metricaParadas">0</p>
+                        <p class="mt-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/70">Paradas<br>registradas</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="relative z-10 -mt-28 lg:-mt-32" data-oculto-impresion>
+        <div class="mx-auto max-w-[1440px] px-margin md:px-margin-tablet lg:px-margin-desktop">
+            <form id="formBuscar" class="mr-anim-subir rounded-xl bg-surface-container-lowest p-5 shadow-2xl ring-1 ring-black/5 md:p-6" style="--retraso:320ms" novalidate>
+                <div class="grid grid-cols-1 items-end gap-4 lg:grid-cols-12">
+                    <div class="lg:col-span-4">
+                        <div class="mb-1.5 flex items-center justify-between gap-2">
+                            <label for="origen" class="mr-etiqueta-campo !mb-0">Punto de partida (origen)</label>
+                            <button type="button" id="btnUbicacion" class="inline-flex items-center gap-1 text-label-md font-label-md text-secondary transition-colors hover:text-primary">
+                                <span class="material-symbols-outlined text-[18px]">my_location</span><span>Mi ubicación actual</span>
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[20px] text-secondary">trip_origin</span>
+                            <input class="mr-campo !pl-10" id="origen" name="origen" maxlength="80" placeholder="Paraíso Centro">
+                        </div>
+                    </div>
+                    <div class="flex justify-center lg:col-span-1">
+                        <button type="button" id="btnIntercambiar" class="mr-btn-intercambiar flex h-11 w-11 items-center justify-center rounded-full bg-surface-container text-primary shadow-sm hover:bg-primary hover:text-white" title="Intercambiar origen y destino" aria-label="Intercambiar origen y destino">
+                            <span class="material-symbols-outlined">swap_vert</span>
+                        </button>
+                    </div>
+                    <div class="lg:col-span-4">
+                        <div class="mb-1.5 flex items-center justify-between gap-2">
+                            <label for="destino" class="mr-etiqueta-campo !mb-0">Punto de llegada (destino)</label>
+                            <span class="text-label-sm font-label-sm uppercase text-outline">Sugerencias rápidas</span>
+                        </div>
+                        <div class="relative">
+                            <span class="material-symbols-outlined relleno pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[20px] text-error">location_on</span>
+                            <input class="mr-campo !pl-10" id="destino" name="destino" maxlength="80" placeholder="Plaza de Armas">
+                        </div>
+                    </div>
+                    <div class="lg:col-span-3">
+                        <label for="horaSalida" class="mr-etiqueta-campo">Hora de salida</label>
+                        <div class="relative">
+                            <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[20px] text-primary-container">schedule</span>
+                            <select class="mr-campo !pl-10" id="horaSalida">
+                                <option value="0">Salir ahora</option>
+                                <option value="15">En 15 minutos</option>
+                                <option value="30">En 30 minutos</option>
+                                <option value="60">En 1 hora</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 flex flex-col gap-4 border-t border-surface-container pt-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex flex-wrap items-center gap-2" id="chipsFrecuentes">
+                        <span class="text-label-md font-label-md text-on-surface-variant">Frecuentes:</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+                        <label class="mr-casilla text-sm font-medium text-on-surface" title="Solo líneas en las que todas las unidades tienen rampa o espacio para silla de ruedas">
+                            <input type="checkbox" id="optAccesible">
+                            <span class="material-symbols-outlined text-[20px] text-primary">accessible</span> Accesible 100%
+                        </label>
+                        <label class="mr-casilla text-sm font-medium text-on-surface" title="Muestra primero las rutas directas">
+                            <input type="checkbox" id="optMenosTransbordos">
+                            <span class="material-symbols-outlined text-[20px] text-secondary">directions_walk</span> Menos transbordos
+                        </label>
+                        <button type="submit" class="mr-btn mr-btn-primario !px-6 !py-3 !text-[15px]">
+                            <span class="material-symbols-outlined">directions</span> Consultar Rutas
+                        </button>
+                    </div>
+                </div>
+                <div id="mensajeBuscador" class="mt-2 min-h-[1.25rem] text-sm text-on-surface-variant" role="status" aria-live="polite"></div>
+            </form>
+        </div>
+    </section>
+
+    <!-- ============ Resultados y mapa ============ -->
+    <section class="mx-auto max-w-[1440px] px-margin py-10 md:px-margin-tablet lg:px-margin-desktop" aria-label="Resultados y mapa">
+        <div class="grid grid-cols-1 items-start gap-gutter-desktop lg:grid-cols-12">
+            <div class="flex flex-col gap-5 lg:col-span-5" data-oculto-impresion>
+                <div class="no-scrollbar flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrar resultados">
+                    <button type="button" class="mr-filtro activo whitespace-nowrap rounded-lg bg-surface-container-lowest px-4 py-2 text-label-md font-label-md text-on-surface shadow-suave ring-1 ring-black/5" data-filtro="todas">Todas (<span id="totalTodas">0</span>)</button>
+                    <button type="button" class="mr-filtro inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-surface-container-lowest px-4 py-2 text-label-md font-label-md text-on-surface shadow-suave ring-1 ring-black/5 hover:bg-surface-container-low" data-filtro="directa">
+                        <span class="material-symbols-outlined text-[18px] text-secondary">directions_bus</span> Transporte Directo
+                    </button>
+                    <button type="button" class="mr-filtro inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-surface-container-lowest px-4 py-2 text-label-md font-label-md text-on-surface shadow-suave ring-1 ring-black/5 hover:bg-surface-container-low" data-filtro="transbordo">
+                        <span class="material-symbols-outlined text-[18px] text-primary-container">transfer_within_a_station</span> Transbordos
+                    </button>
+                </div>
+
+                <form id="formParada" role="search" class="flex items-center gap-2 rounded-xl bg-surface-container-lowest p-1.5 pl-3 shadow-suave ring-1 ring-black/5 transition-shadow focus-within:ring-2 focus-within:ring-secondary">
+                    <span class="material-symbols-outlined text-[20px] text-outline">pin_drop</span>
+                    <label class="sr-only" for="buscarParada">Buscar parada por código o nombre</label>
+                    <input id="buscarParada" type="search" maxlength="80" autocomplete="off" class="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm outline-none placeholder:text-outline" placeholder="Buscar por código de poste o parada (ej. #108, #114)...">
+                    <button type="submit" class="mr-btn mr-btn-primario mr-btn-sm">Localizar</button>
+                </form>
+                <div id="mensajeParada" class="-mt-2 hidden text-sm" role="status" aria-live="polite"></div>
+
+                <div class="flex items-center justify-between">
+                    <h2 class="text-label-sm font-label-sm uppercase tracking-widest text-on-surface-variant" id="tituloResultados">Rutas disponibles</h2>
+                    <span class="inline-flex items-center gap-2 rounded-full bg-secondary-container/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-on-secondary-container"><span class="mr-ping verde"></span> En vivo</span>
+                </div>
+                <div id="resultados" class="flex flex-col gap-4" aria-live="polite"></div>
+
+                <div class="mr-revelar">
+                    <div class="mb-3 flex items-center justify-between gap-2">
+                        <h2 class="text-label-sm font-label-sm uppercase tracking-widest text-on-surface-variant">Paradas <span class="text-primary">frecuentes</span></h2>
+                        <a class="text-label-md font-label-md text-secondary hover:underline" href="paradas.html">Ver paradas en el mapa</a>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2" id="paradasFrecuentes"></div>
+                </div>
+            </div>
+
+            <div class="lg:sticky lg:top-24 lg:col-span-7" data-mapa-impresion>
+                <div class="mr-mapa-tarjeta mr-anim-escala relative h-[480px] overflow-hidden rounded-xl bg-surface-container shadow-xl ring-1 ring-black/5 md:h-[560px] lg:h-[680px]" style="--retraso:200ms">
+                    <div id="mapa" class="mr-mapa" role="region" aria-label="Mapa de rutas"></div>
+
+                    <div class="mr-mapa-capa absolute left-4 top-4 flex gap-2" role="group" aria-label="Vista del mapa" data-oculto-impresion>
+                        <button type="button" id="btnVistaRuta" class="mr-btn mr-btn-claro mr-btn-sm shadow-md disabled:opacity-60" disabled>
+                            <span class="material-symbols-outlined">route</span> Ruta completa
+                        </button>
+                        <button type="button" id="btnVistaParadas" class="mr-btn mr-btn-claro mr-btn-sm shadow-md">
+                            <span class="material-symbols-outlined">location_on</span> Paradas
+                        </button>
+                    </div>
+
+                    <div class="mr-mapa-capa absolute right-4 top-4 hidden w-72 md:block" data-oculto-impresion>
+                        <div id="tarjetaUnidad" class="mr-capa-unidad hidden rounded-xl bg-white/95 p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur" aria-live="polite">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="truncate text-label-sm font-label-sm uppercase tracking-wider text-on-surface-variant" data-linea></span>
+                                <span class="inline-flex items-center gap-1 rounded-full bg-secondary-container px-2 py-0.5 text-[10px] font-bold uppercase text-on-secondary-container"><span class="mr-ping verde !h-1.5 !w-1.5"></span> Disponible</span>
+                            </div>
+                            <h3 class="mt-2 text-headline-sm font-headline-sm text-primary" data-unidad></h3>
+                            <p class="text-sm text-on-surface-variant" data-chofer></p>
+                            <dl class="mt-3 grid gap-2 border-t border-surface-container pt-3 text-sm">
+                                <div class="flex items-center justify-between gap-2"><dt class="flex items-center gap-2 text-on-surface-variant"><span class="h-2 w-2 rounded-full bg-secondary"></span>Hora de salida:</dt><dd class="font-semibold" data-salida></dd></div>
+                                <div class="flex items-center justify-between gap-2"><dt class="flex items-center gap-2 text-on-surface-variant"><span class="h-2 w-2 rounded-full bg-primary-container"></span>Salió con:</dt><dd class="font-semibold" data-pasajeros></dd></div>
+                                <div class="flex items-center justify-between gap-2"><dt class="flex items-center gap-2 text-on-surface-variant"><span class="h-2 w-2 rounded-full bg-secondary"></span>Servicio:</dt><dd class="font-semibold text-secondary" data-servicio></dd></div>
+                                <div class="flex items-center justify-between gap-2"><dt class="flex items-center gap-2 text-on-surface-variant"><span class="h-2 w-2 rounded-full bg-primary-container"></span>Equipamiento:</dt><dd class="text-right font-semibold" data-equipamiento></dd></div>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div id="panelVehiculo" class="mr-capa-flota mr-mapa-capa absolute inset-x-3 bottom-3 hidden md:inset-x-4 md:bottom-4" aria-live="polite" data-oculto-impresion>
+                        <div class="flex flex-col gap-3 rounded-xl bg-inverse-surface/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur sm:flex-row sm:items-center">
+                            <div class="flex min-w-0 flex-1 items-center gap-3">
+                                <div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary-container text-primary">
+                                    <span class="material-symbols-outlined relleno">directions_bus</span>
+                                    <span class="absolute -right-1 -top-1 mr-ping"></span>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="truncate font-semibold" data-titulo></p>
+                                    <p class="flex flex-wrap items-center gap-x-2 text-sm text-inverse-on-surface/80" data-detalle></p>
+                                </div>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-1.5">
+                                <button type="button" class="hidden h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20" data-anterior aria-label="Vehículo anterior"><span class="material-symbols-outlined">chevron_left</span></button>
+                                <span class="hidden px-1 text-xs text-white/70" data-contador></span>
+                                <button type="button" class="hidden h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20" data-siguiente aria-label="Vehículo siguiente"><span class="material-symbols-outlined">chevron_right</span></button>
+                                <button type="button" class="mr-btn mr-btn-sm !bg-secondary-container !text-on-secondary-container hover:!bg-secondary-fixed" data-seguir aria-pressed="false">
+                                    <span class="material-symbols-outlined">near_me</span><span>Seguir Vehículo</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-3" data-oculto-impresion>
+                    <div class="mr-actualizacion" id="indicador"></div>
+                    <button type="button" class="mr-btn mr-btn-peligro" data-abrir-modal="modalReporte">
+                        <span class="material-symbols-outlined">car_crash</span> Reportar Accidente
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ Estado del servicio ============ -->
+    <section id="estado-servicio" class="scroll-mt-24 border-y border-surface-container bg-surface-container-lowest" data-oculto-impresion aria-labelledby="tituloEstado">
+        <div class="mx-auto flex max-w-[1440px] flex-col gap-6 px-margin py-8 md:px-margin-tablet lg:flex-row lg:items-center lg:justify-between lg:px-margin-desktop">
+            <div class="mr-revelar flex min-w-0 items-start gap-4">
+                <div id="iconoEstado" class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary-container/50 text-secondary">
+                    <span class="material-symbols-outlined relleno text-[30px]">check_circle</span>
+                </div>
+                <div class="min-w-0">
+                    <h2 id="tituloEstado" class="text-headline-sm font-headline-sm text-on-surface">Rutas Operando Con Normalidad</h2>
+                    <p id="textoEstado" class="mt-1 text-sm text-on-surface-variant">Sin incidentes críticos reportados hasta el momento.</p>
+                    <div id="avisosEstado" class="mt-2 flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+            <div class="mr-revelar flex flex-wrap items-center gap-2" style="--retraso:120ms">
+                <button type="button" class="mr-btn mr-btn-contorno" id="btnImprimirMapa" title="Abre la ventana de impresión; elige «Guardar como PDF» para descargarlo">
+                    <span class="material-symbols-outlined">download</span> Descargar Mapa PDF
+                </button>
+                <button type="button" class="mr-btn mr-btn-contorno" id="btnHorarios" title="Imprime el itinerario y los tiempos estimados de la ruta seleccionada">
+                    <span class="material-symbols-outlined">print</span> Horarios Imprimibles
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ Ventajas ============ -->
+    <section class="mx-auto max-w-[1440px] px-margin py-16 md:px-margin-tablet lg:px-margin-desktop" data-oculto-impresion aria-labelledby="tituloVentajas">
+        <div class="mr-revelar mx-auto max-w-2xl text-center">
+            <p class="text-label-sm font-label-sm uppercase tracking-widest text-secondary">Todo tu traslado en un lugar</p>
+            <h2 id="tituloVentajas" class="mt-2 font-headline-lg text-headline-lg text-primary">Muévete con certeza por la ciudad</h2>
+            <p class="mt-3 text-on-surface-variant">Información clara para decidir cuándo salir, qué ruta tomar y dónde bajar.</p>
+        </div>
+        <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <a href="mapa.html" class="mr-revelar mr-tarjeta mr-tarjeta-interactiva group p-6" style="--retraso:0ms">
+                <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-secondary-container transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110"><span class="material-symbols-outlined">sensors</span></span>
+                <h3 class="mt-4 font-headline-sm text-headline-sm text-on-surface">Unidades en vivo</h3>
+                <p class="mt-1.5 text-sm text-on-surface-variant">Mira en el mapa dónde va cada unidad y cuánto falta para que llegue a tu parada.</p>
+                <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-secondary">Abrir mapa <span class="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-1">arrow_forward</span></span>
+            </a>
+            <a href="#formBuscar" class="mr-revelar mr-tarjeta mr-tarjeta-interactiva group p-6" style="--retraso:90ms">
+                <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-secondary-container transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110"><span class="material-symbols-outlined">alt_route</span></span>
+                <h3 class="mt-4 font-headline-sm text-headline-sm text-on-surface">Rutas con transbordo</h3>
+                <p class="mt-1.5 text-sm text-on-surface-variant">El planificador combina rutas cuando no hay una directa y te dice dónde cambiar.</p>
+                <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-secondary">Planificar <span class="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-1">arrow_forward</span></span>
+            </a>
+            <a href="paradas.html?cerca=1" class="mr-revelar mr-tarjeta mr-tarjeta-interactiva group p-6" style="--retraso:180ms">
+                <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-secondary-container transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110"><span class="material-symbols-outlined">near_me</span></span>
+                <h3 class="mt-4 font-headline-sm text-headline-sm text-on-surface">Paradas cercanas</h3>
+                <p class="mt-1.5 text-sm text-on-surface-variant">Encuentra las paradas a pocos pasos de ti y las rutas que pasan por cada una.</p>
+                <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-secondary">Buscar cerca <span class="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-1">arrow_forward</span></span>
+            </a>
+            <a href="rutas.html" class="mr-revelar mr-tarjeta mr-tarjeta-interactiva group p-6" style="--retraso:270ms">
+                <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-secondary-container transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110"><span class="material-symbols-outlined">accessible_forward</span></span>
+                <h3 class="mt-4 font-headline-sm text-headline-sm text-on-surface">Viaje accesible</h3>
+                <p class="mt-1.5 text-sm text-on-surface-variant">Filtra las líneas cuyas unidades tienen rampa o espacio para silla de ruedas.</p>
+                <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-secondary">Ver rutas <span class="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-1">arrow_forward</span></span>
+            </a>
+        </div>
+    </section>
+</main>
+
+<!-- ============ Reportar accidente ============ -->
+<div class="mr-modal" id="modalReporte" role="dialog" aria-modal="true" aria-labelledby="tituloReporte">
+    <form class="mr-modal-panel" id="formReporte" novalidate>
+        <div class="flex items-center justify-between gap-3 border-b border-surface-container px-6 py-4">
+            <h2 id="tituloReporte" class="flex items-center gap-2 text-headline-sm font-headline-sm text-on-surface">
+                <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-error-container text-error"><span class="material-symbols-outlined relleno text-[20px]">car_crash</span></span>
+                Reportar accidente
+            </h2>
+            <button type="button" class="mr-btn mr-btn-secundario mr-btn-icono !rounded-full" data-cerrar-modal aria-label="Cerrar"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="grid gap-4 px-6 py-5">
+            <div class="flex items-start gap-2 rounded-lg bg-error-container px-3 py-2.5 text-sm text-on-error-container">
+                <span class="material-symbols-outlined relleno text-[20px]">call</span>
+                <p>Si hay personas lesionadas o en peligro, llama primero al <strong>911</strong>.</p>
+            </div>
+            <div>
+                <label class="mr-etiqueta-campo" for="reporteRuta">Ruta</label>
+                <select class="mr-campo" id="reporteRuta" name="ruta_id" required>
+                    <option value="">Selecciona la ruta</option>
+                </select>
+            </div>
+            <div>
+                <label class="mr-etiqueta-campo" for="reporteDescripcion">¿Qué pasó?</label>
+                <textarea class="mr-campo" id="reporteDescripcion" name="descripcion" rows="3" maxlength="500" required placeholder="Ej. Choque entre un auto y la unidad en la esquina de…"></textarea>
+            </div>
+            <div>
+                <label class="mr-etiqueta-campo" for="reporteContacto">Teléfono o correo de contacto <span class="normal-case tracking-normal text-outline">(opcional)</span></label>
+                <input class="mr-campo" id="reporteContacto" name="contacto" maxlength="120">
+            </div>
+            <label class="mr-interruptor">
+                <input type="checkbox" id="reporteUbicacion"><span class="pista"></span> Incluir mi ubicación actual
+            </label>
+            <div id="mensajeReporte" class="text-sm" role="status" aria-live="polite"></div>
+        </div>
+        <div class="flex justify-end gap-2 border-t border-surface-container bg-surface-container-low px-6 py-4">
+            <button type="button" class="mr-btn mr-btn-secundario" data-cerrar-modal>Cancelar</button>
+            <button type="submit" class="mr-btn mr-btn-peligro-solido"><span class="material-symbols-outlined">send</span> Enviar reporte</button>
+        </div>
+    </form>
+</div>
+
+<div id="horariosImprimibles"></div>
+<div id="mr-pie"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="assets/js/datos.js"></script>
+<script src="assets/js/servicios.js"></script>
+<script src="assets/js/moviruta.js"></script>
+<script src="assets/js/interfaz.js"></script>
+<script src="assets/js/inicio.js"></script>
+</body>
+</html>

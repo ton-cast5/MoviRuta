@@ -1,59 +1,32 @@
 /**
  * MoviRuta · utilidades comunes del frontend:
- * llamadas a la API, mapas Leaflet, capas de rutas/vehículos, actualización periódica y geolocalización.
+ * consultas a la API local (MRServicios), mapas Leaflet, capas de rutas/vehículos, actualización periódica y geolocalización.
  */
 const MR = (() => {
-    const datos = document.body.dataset;
     const config = {
-        base: datos.base || '',
-        centro: [parseFloat(datos.mapaLat), parseFloat(datos.mapaLng)],
-        zoom: parseInt(datos.mapaZoom, 10) || 13,
-        mosaicos: datos.mapaMosaicos || 'google',
-        actualizacionMs: (parseInt(datos.actualizacion, 10) || 15) * 1000,
+        base: document.body.dataset.base || '.',
+        centro: [17.9930, -92.9310],
+        zoom: 14,
+        actualizacionMs: 10000,
     };
 
     const url = (ruta) => `${config.base}/${String(ruta).replace(/^\//, '')}`;
+    const parametro = (nombre) => new URLSearchParams(location.search).get(nombre);
+    const T = MRServicios.texto;
 
     function esc(texto) {
         return String(texto ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
-    async function api(ruta, parametros = {}) {
-        const consulta = new URLSearchParams();
-        Object.entries(parametros).forEach(([k, v]) => {
-            if (v !== undefined && v !== null && v !== '') consulta.set(k, v);
-        });
-        const destino = url(`api/${ruta}`) + (consulta.toString() ? `?${consulta}` : '');
-        let respuesta;
-        try {
-            respuesta = await fetch(destino, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
-        } catch (e) {
-            throw new Error('No hay conexión. Revisa tu internet e intenta nuevamente.');
-        }
-        let json = null;
-        try { json = await respuesta.json(); } catch (e) { /* respuesta no JSON */ }
-        if (!respuesta.ok) {
-            throw new Error((json && json.error) || 'No fue posible cargar la información. Intenta nuevamente.');
-        }
-        return json;
-    }
+    const icono = (nombre, clases = '') => `<span class="material-symbols-outlined ${clases}" aria-hidden="true">${nombre}</span>`;
 
-    /** POST de un formulario (incluye su campo csrf) a la API; devuelve el JSON o lanza el mensaje de error. */
-    async function enviar(ruta, formulario) {
-        let respuesta;
-        try {
-            respuesta = await fetch(url(`api/${ruta}`), {
-                method: 'POST', body: formulario, headers: { Accept: 'application/json' }, credentials: 'same-origin',
-            });
-        } catch (e) {
-            throw new Error('No hay conexión. Revisa tu internet e intenta nuevamente.');
-        }
-        let json = null;
-        try { json = await respuesta.json(); } catch (e) { /* respuesta no JSON */ }
-        if (!respuesta.ok) {
-            throw new Error((json && json.error) || 'No fue posible enviar la información. Intenta nuevamente.');
-        }
-        return json;
+    /** Consulta la API local con una pequeña espera, para que la interfaz muestre su estado de carga. */
+    function api(endpoint, parametros = {}, espera = 140) {
+        return new Promise((resolver, rechazar) => {
+            setTimeout(() => {
+                try { resolver(MRServicios.api(endpoint, parametros)); } catch (e) { rechazar(e); }
+            }, espera + Math.random() * espera);
+        });
     }
 
     /* ---------------- Texto para el usuario ---------------- */
@@ -68,89 +41,69 @@ const MR = (() => {
 
     function estadoVehiculo(v) {
         return v.con_ubicacion
-            ? `<i class="bi bi-broadcast text-success"></i> Ubicación actualizada ${tiempoRelativo(v.actualizado_hace_seg)}`
-            : '<i class="bi bi-slash-circle text-secondary"></i> No hay información de ubicación disponible';
+            ? `${icono('sensors', 'text-[15px] text-secondary')} Ubicación actualizada ${tiempoRelativo(v.actualizado_hace_seg)}`
+            : `${icono('location_disabled', 'text-[15px] text-outline')} No hay información de ubicación disponible`;
     }
 
-    function claseEstado(estado) {
-        return { con_retrasos: 'aviso', suspendida: 'suspendido' }[estado] || 'normal';
+    const claseEstado = (estado) => T.estadoInfo(estado).clase;
+    const iconoEstado = (estado) => T.estadoInfo(estado).icono;
+
+    function insigniaRuta(ruta, tamano = '') {
+        const clase = tamano === 'sm' || tamano === true ? ' mr-codigo-sm' : tamano === 'lg' ? ' mr-codigo-lg' : '';
+        return `<span class="mr-codigo${clase}" style="background:${esc(ruta.color)}">${esc(ruta.codigo)}</span>`;
     }
 
-    function iconoEstado(estado) {
-        return { con_retrasos: 'exclamation-triangle-fill', suspendida: 'x-octagon-fill' }[estado] || 'check-circle-fill';
+    /** Una insignia por número de ruta (ida y vuelta comparten número). */
+    function insigniasRutas(rutas, tamano = '') {
+        const vistas = new Map();
+        rutas.forEach((r) => {
+            const previa = vistas.get(r.codigo);
+            if (previa) previa.destinos.push(r.destino);
+            else vistas.set(r.codigo, { ruta: r, destinos: [r.destino] });
+        });
+        return [...vistas.values()].map(({ ruta, destinos }) =>
+            `<span title="${esc(ruta.nombre)} · hacia ${esc(destinos.join(' / '))}">${insigniaRuta(ruta, tamano)}</span>`).join('');
     }
 
-    function insigniaRuta(ruta, pequena = false) {
-        return `<span class="mr-codigo${pequena ? ' mr-codigo-sm' : ''}" style="background:${esc(ruta.color)}">${esc(ruta.codigo)}</span>`;
+    function estadoHtml(estado, texto) {
+        const info = T.estadoInfo(estado);
+        return `<span class="mr-estado ${info.clase}">${icono(info.icono, 'relleno')}${esc(texto || info.texto)}</span>`;
+    }
+
+    function avisoServicioHtml(ruta) {
+        if (ruta.estado_servicio === 'normal' && !ruta.aviso) return '';
+        const info = T.estadoInfo(ruta.estado_servicio);
+        const clase = ruta.estado_servicio === 'suspendida' ? 'suspendido' : 'aviso';
+        return `<div class="mr-aviso-servicio ${clase}">${icono(info.icono, 'relleno text-[20px]')}
+            <div><strong class="font-semibold">${esc(info.texto)}</strong>${ruta.aviso ? `<div>${esc(ruta.aviso)}</div>` : ''}</div></div>`;
+    }
+
+    function htmlVacio(nombreIcono, mensaje, extra = '') {
+        return `<div class="mr-vacio">${icono(nombreIcono)}<p>${esc(mensaje)}</p>${extra}</div>`;
+    }
+
+    function esqueletos(n = 3, alto = 'h-24') {
+        return Array.from({ length: n }, () => `<div class="mr-esqueleto ${alto} w-full"></div>`).join('');
     }
 
     /* ---------------- Mapa ---------------- */
 
+    const hayMapa = typeof L !== 'undefined';
     const ANIO = new Date().getFullYear();
-    const ESCALA_GOOGLE = L.Browser.retina ? 2 : 1;
-    const urlGoogle = (capa) => `https://mt{s}.google.com/vt/lyrs=${capa}&hl=es-419&gl=MX&scale=${ESCALA_GOOGLE}&x={x}&y={y}&z={z}`;
-
-    /** Tipos de mapa: [plantilla, opciones de L.tileLayer, nombre visible]. */
-    const MOSAICOS = {
-        google: {
-            mapa: [urlGoogle('m'), { subdomains: '0123', maxZoom: 21, attribution: `Datos del mapa &copy;${ANIO} Google` }, 'Mapa'],
-            satelite: [urlGoogle('y'), { subdomains: '0123', maxZoom: 20, attribution: `Imágenes y datos del mapa &copy;${ANIO} Google` }, 'Satélite'],
-        },
-        osm: {
-            mapa: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            }, 'Mapa'],
-        },
-    };
-
-    /** Miniatura del otro tipo de mapa (esquina inferior izquierda), como en Google Maps. */
-    const ControlTipoMapa = L.Control.extend({
-        options: { position: 'bottomleft' },
-        initialize(capas, options) {
-            L.setOptions(this, options);
-            this.capas = capas;
-            this.actual = 'mapa';
-        },
-        onAdd(mapa) {
-            this.mapa = mapa;
-            const boton = this.boton = L.DomUtil.create('button', 'mr-tipo-mapa');
-            boton.type = 'button';
-            boton.innerHTML = '<span class="mr-tipo-mapa-nombre"></span>';
-            L.DomEvent.disableClickPropagation(boton);
-            L.DomEvent.on(boton, 'click', this.alternar, this);
-            mapa.on('moveend', this.pintar, this);
-            this.pintar();
-            return boton;
-        },
-        onRemove(mapa) { mapa.off('moveend', this.pintar, this); },
-        otro() { return this.actual === 'mapa' ? 'satelite' : 'mapa'; },
-        alternar() {
-            const siguiente = this.otro();
-            this.mapa.removeLayer(this.capas[this.actual]);
-            this.capas[siguiente].addTo(this.mapa).bringToBack();
-            this.actual = siguiente;
-            this.pintar();
-        },
-        pintar() {
-            const capa = this.capas[this.otro()];
-            const z = Math.max(3, Math.min(Math.round(this.mapa.getZoom()) - 1, 18));
-            const t = this.mapa.project(this.mapa.getCenter(), z).divideBy(256).floor();
-            const urlMiniatura = L.Util.template(capa.options.plantilla, { s: String(Math.abs(t.x + t.y) % 4), x: t.x, y: t.y, z });
-            this.boton.style.backgroundImage = `url("${urlMiniatura}")`;
-            this.boton.querySelector('.mr-tipo-mapa-nombre').textContent = capa.options.nombre;
-            this.boton.title = `Mostrar ${capa.options.nombre.toLowerCase()}`;
-        },
-    });
 
     function crearMapa(id, opciones = {}) {
+        const escala = L.Browser.retina ? 2 : 1;
+        const urlGoogle = (capa) => `https://mt{s}.google.com/vt/lyrs=${capa}&hl=es-419&gl=MX&scale=${escala}&x={x}&y={y}&z={z}`;
+        const tipos = {
+            mapa: [urlGoogle('m'), { subdomains: '0123', maxZoom: 21, attribution: `Datos del mapa &copy;${ANIO} Google` }, 'Mapa'],
+            satelite: [urlGoogle('y'), { subdomains: '0123', maxZoom: 20, attribution: `Imágenes y datos del mapa &copy;${ANIO} Google` }, 'Satélite'],
+        };
         const mapa = L.map(id, {
             scrollWheelZoom: opciones.scrollWheelZoom ?? true,
             zoomControl: false,
-        }).setView(config.centro, config.zoom);
+        }).setView(opciones.centro || config.centro, opciones.zoom || config.zoom);
         mapa.attributionControl.setPrefix(false);
 
-        const tipos = MOSAICOS[config.mosaicos] || MOSAICOS.google;
         const capas = {};
         Object.entries(tipos).forEach(([clave, [plantilla, ajustes, nombre]]) => {
             capas[clave] = L.tileLayer(plantilla, { ...ajustes, nombre, plantilla });
@@ -159,8 +112,52 @@ const MR = (() => {
         mapa.getContainer().classList.add('mr-mapa-google');
 
         L.control.zoom({ position: 'bottomright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(mapa);
-        if (capas.satelite) new ControlTipoMapa(capas).addTo(mapa);
+        new (controlTipoMapa())(capas).addTo(mapa);
         return mapa;
+    }
+
+    /** Miniatura del otro tipo de mapa (esquina inferior izquierda), como en Google Maps. */
+    let ClaseTipoMapa = null;
+    function controlTipoMapa() {
+        if (ClaseTipoMapa) return ClaseTipoMapa;
+        ClaseTipoMapa = L.Control.extend({
+            options: { position: 'bottomleft' },
+            initialize(capas, options) {
+                L.setOptions(this, options);
+                this.capas = capas;
+                this.actual = 'mapa';
+            },
+            onAdd(mapa) {
+                this.mapa = mapa;
+                const boton = this.boton = L.DomUtil.create('button', 'mr-tipo-mapa');
+                boton.type = 'button';
+                boton.innerHTML = '<span class="mr-tipo-mapa-nombre"></span>';
+                L.DomEvent.disableClickPropagation(boton);
+                L.DomEvent.on(boton, 'click', this.alternar, this);
+                mapa.on('moveend', this.pintar, this);
+                this.pintar();
+                return boton;
+            },
+            onRemove(mapa) { mapa.off('moveend', this.pintar, this); },
+            otro() { return this.actual === 'mapa' ? 'satelite' : 'mapa'; },
+            alternar() {
+                const siguiente = this.otro();
+                this.mapa.removeLayer(this.capas[this.actual]);
+                this.capas[siguiente].addTo(this.mapa).bringToBack();
+                this.actual = siguiente;
+                this.pintar();
+            },
+            pintar() {
+                const capa = this.capas[this.otro()];
+                const z = Math.max(3, Math.min(Math.round(this.mapa.getZoom()) - 1, 18));
+                const t = this.mapa.project(this.mapa.getCenter(), z).divideBy(256).floor();
+                const urlMiniatura = L.Util.template(capa.options.plantilla, { s: String(Math.abs(t.x + t.y) % 4), x: t.x, y: t.y, z });
+                this.boton.style.backgroundImage = `url("${urlMiniatura}")`;
+                this.boton.querySelector('.mr-tipo-mapa-nombre').textContent = capa.options.nombre;
+                this.boton.title = `Mostrar ${capa.options.nombre.toLowerCase()}`;
+            },
+        });
+        return ClaseTipoMapa;
     }
 
     const iconoParada = (color, destacada = false) => L.divIcon({
@@ -171,9 +168,9 @@ const MR = (() => {
         popupAnchor: [0, -8],
     });
 
-    const iconoVehiculo = (color) => L.divIcon({
+    const iconoVehiculo = (color, estatico = false) => L.divIcon({
         className: 'mr-icono-limpio',
-        html: `<div class="mr-marcador-vehiculo" style="--color:${esc(color)}"><i class="bi bi-bus-front-fill"></i></div>`,
+        html: `<div class="mr-marcador-vehiculo${estatico ? ' estatico' : ''}" style="--color:${esc(color)}">${icono('directions_bus')}</div>`,
         iconSize: [34, 34],
         iconAnchor: [17, 17],
         popupAnchor: [0, -16],
@@ -181,10 +178,10 @@ const MR = (() => {
 
     const iconoDestino = () => L.divIcon({
         className: 'mr-icono-limpio',
-        html: '<div class="mr-marcador-destino"><i class="bi bi-geo-alt-fill"></i></div>',
-        iconSize: [36, 36],
-        iconAnchor: [18, 34],
-        popupAnchor: [0, -30],
+        html: `<div class="mr-marcador-destino">${icono('location_on')}</div>`,
+        iconSize: [38, 38],
+        iconAnchor: [19, 36],
+        popupAnchor: [0, -32],
     });
 
     const iconoUsuario = () => L.divIcon({
@@ -195,13 +192,25 @@ const MR = (() => {
     });
 
     function popupParada(p, extra = '') {
-        return `<strong>${esc(p.nombre)}</strong>${p.referencia ? `<br><span class="text-secondary">${esc(p.referencia)}</span>` : ''}
-                ${extra}<br><a href="${url('parada.php?id=' + p.id)}">Ver rutas y llegadas</a>`;
+        return `<strong>${esc(p.nombre)}</strong>${p.referencia ? `<br><span style="color:#6f7973">${esc(p.referencia)}</span>` : ''}
+                ${extra}<br><a href="${url('parada.html?id=' + p.id)}">Ver rutas y llegadas →</a>`;
+    }
+
+    /** Polilínea que se dibuja sola al aparecer, con un flujo animado encima. */
+    function trazoAnimado(grupo, puntos, color, opciones = {}) {
+        L.polyline(puntos, { color: '#000', weight: 9, opacity: 0.18, lineJoin: 'round', interactive: false }).addTo(grupo);
+        const linea = L.polyline(puntos, { color, weight: opciones.grosor || 6, opacity: 1, lineJoin: 'round', className: 'mr-trazo-animado' }).addTo(grupo);
+        const elemento = linea.getElement && linea.getElement();
+        if (elemento) elemento.setAttribute('pathLength', '1');
+        if (opciones.flujo !== false) {
+            L.polyline(puntos, { color: '#fff', weight: 2, opacity: 0.85, lineCap: 'round', interactive: false, className: 'mr-trazo-flujo' }).addTo(grupo);
+        }
+        return linea;
     }
 
     /**
      * Dibuja el trazado y las paradas de una ruta.
-     * opciones: { alSeleccionarParada(parada), destacadas: [ids], destino: id, ajustar: true }
+     * opciones: { alSeleccionarParada(parada), destacadas: [ids], destino: id, ajustar: true, flujo: true }
      */
     function dibujarRuta(mapa, detalle, opciones = {}) {
         const color = detalle.ruta.color;
@@ -211,10 +220,8 @@ const MR = (() => {
 
         registrarRecorrido(detalle.ruta.id, detalle.recorrido);
         if (detalle.recorrido.length > 1) {
-            L.polyline(detalle.recorrido, { color: '#000', weight: 9, opacity: 0.22, lineJoin: 'round', interactive: false }).addTo(grupo);
-            L.polyline(detalle.recorrido, { color, weight: 6, opacity: 1, lineJoin: 'round' })
-                .bindTooltip(`Ruta ${detalle.ruta.codigo} · ${detalle.ruta.nombre}`, { sticky: true })
-                .addTo(grupo);
+            trazoAnimado(grupo, detalle.recorrido, color, opciones)
+                .bindTooltip(`Ruta ${esc(detalle.ruta.codigo)} · ${esc(detalle.ruta.nombre)}`, { sticky: true });
         }
         detalle.paradas.forEach((p) => {
             const esDestino = opciones.destino === p.id;
@@ -226,12 +233,15 @@ const MR = (() => {
             marcadores.set(p.id, m);
         });
         if (opciones.ajustar !== false && grupo.getLayers().length) {
-            mapa.fitBounds(grupo.getBounds(), { padding: [30, 30] });
+            mapa.fitBounds(grupo.getBounds(), { padding: [40, 40] });
         }
         return {
             grupo,
             marcadores,
             quitar: () => mapa.removeLayer(grupo),
+            mostrarParadas(visibles) {
+                marcadores.forEach((m) => { if (visibles) grupo.addLayer(m); else grupo.removeLayer(m); });
+            },
             destacar(ids) {
                 const set = new Set(ids);
                 marcadores.forEach((m, id) => m.setIcon(opciones.destino === id ? iconoDestino() : iconoParada(color, set.has(id))));
@@ -257,10 +267,9 @@ const MR = (() => {
         recorridos.set(rutaId, { puntos, acumulado, total, circular });
     }
 
-    /** Descarga una sola vez el trazado de las rutas cuyas unidades aparecen en un mapa sin la ruta dibujada. */
     function asegurarRecorrido(rutaId) {
         if (recorridos.has(rutaId) || recorridosPendientes.has(rutaId)) return;
-        recorridosPendientes.set(rutaId, api('rutas.php', { id: rutaId })
+        recorridosPendientes.set(rutaId, api('rutas', { id: rutaId }, 0)
             .then((d) => registrarRecorrido(rutaId, d.recorrido))
             .catch(() => recorridosPendientes.delete(rutaId)));
     }
@@ -303,7 +312,7 @@ const MR = (() => {
      * Con el recorrido de la ruta, la unidad avanza sobre la calle a la velocidad medida entre sus dos últimos
      * reportes de ubicación; cada reporte nuevo corrige la posición suavemente y nunca la hace retroceder.
      * Sin recorrido (o fuera de él) se desliza en línea recta hacia la nueva posición.
-     * opciones: { alMover(vehiculoId, latLng) } se llama en cada cuadro en que la unidad se mueve.
+     * opciones: { alMover(vehiculoId, latLng), alSeleccionar(vehiculo) }
      */
     function capaVehiculos(mapa, opciones = {}) {
         const estados = new Map();
@@ -311,13 +320,12 @@ const MR = (() => {
         const MAX_PREDICCION_MS = config.actualizacionMs * 2;
         const SUAVIZADO_MS = 1000;
         const TOLERANCIA_TRAZADO_M = 60;
-        const VELOCIDAD_MAX_M_MS = 0.04; // 144 km/h
+        const VELOCIDAD_MAX_M_MS = 0.04;
         let cuadro = null;
         let cuadroAnterior = 0;
 
         const notificar = (id, pos) => { if (opciones.alMover) opciones.alMover(id, pos); };
         const modulo = (d, total) => ((d % total) + total) % total;
-        /** Diferencia a − b sobre un recorrido de longitud total, en el rango (−total/2, total/2]. */
         const diferenciaCircular = (a, b, total) => modulo(a - b + total / 2, total) - total / 2;
 
         function animar(ahora) {
@@ -332,7 +340,6 @@ const MR = (() => {
                     if (error < -150) {
                         e.distancia = prevista;
                     } else {
-                        // Velocidad medida más una corrección proporcional; si va un poco adelantada solo se frena.
                         let rapidez = e.velocidad + error / SUAVIZADO_MS;
                         if (e.velocidad > 0 && error > -40) rapidez = Math.max(rapidez, e.velocidad * 0.5);
                         if (rapidez <= 0 || (e.velocidad === 0 && error < 0.05)) return;
@@ -364,7 +371,6 @@ const MR = (() => {
             notificar(id, pos);
         }
 
-        /** Procesa un reporte de ubicación (posición + momento en que se tomó). */
         function reportar(id, e, rutaId, pos, t) {
             if (Math.abs(t - e.ultimo.t) < 1500 && pos.distanceTo(e.ultimo.pos) < 1) return;
             const rec = recorridos.get(rutaId);
@@ -417,12 +423,14 @@ const MR = (() => {
                     asegurarRecorrido(v.ruta_id);
                     const contenido = `<strong>Unidad ${esc(v.unidad)}</strong><br>
                         Ruta ${esc(v.ruta_codigo)} · ${esc(v.ruta_nombre)} (${esc(v.ruta_sentido)})<br>
-                        Hacia ${esc(v.destino)}${v.chofer ? `<br>Chofer: ${esc(v.chofer)}` : ''}<br>
-                        <span class="text-secondary small">${estadoVehiculo(v)}</span>`;
+                        Hacia ${esc(v.destino)}${v.chofer ? `<br>Chofer: ${esc(v.chofer)}` : ''}
+                        ${v.proxima_parada ? `<br>Próxima parada: <b>${esc(v.proxima_parada.nombre)}</b> · ${esc(v.proxima_parada.texto)}` : ''}<br>
+                        <span style="color:#6f7973;font-size:12px">${estadoVehiculo(v)}</span>`;
                     const pos = L.latLng(v.latitud, v.longitud);
                     const t = ahora - (v.actualizado_hace_seg || 0) * 1000;
                     const e = estados.get(id);
                     if (e) {
+                        e.v = v;
                         reportar(id, e, v.ruta_id, pos, t);
                         e.m.setPopupContent(contenido);
                         return;
@@ -433,7 +441,9 @@ const MR = (() => {
                     const rec = recorridos.get(v.ruta_id);
                     const proyeccion = rec ? proyectar(rec, pos) : null;
                     const sobre = proyeccion && proyeccion.dist <= TOLERANCIA_TRAZADO_M ? proyeccion.sobre : null;
-                    estados.set(id, { m, rutaId: v.ruta_id, ultimo: { t, pos, sobre }, velocidad: 0, distancia: sobre, tween: null });
+                    const estado = { m, v, rutaId: v.ruta_id, ultimo: { t, pos, sobre }, velocidad: 0, distancia: sobre, tween: null };
+                    if (opciones.alSeleccionar) m.on('click', () => opciones.alSeleccionar(estado.v));
+                    estados.set(id, estado);
                 });
                 estados.forEach((e, id) => {
                     if (!vigentes.has(id)) {
@@ -447,9 +457,9 @@ const MR = (() => {
                 const e = estados.get(vehiculoId);
                 return e ? e.m.getLatLng() : null;
             },
-            enfocar(vehiculoId) {
+            enfocar(vehiculoId, abrir = true) {
                 const e = estados.get(vehiculoId);
-                if (e) { mapa.setView(e.m.getLatLng(), Math.max(mapa.getZoom(), 15)); e.m.openPopup(); }
+                if (e) { mapa.setView(e.m.getLatLng(), Math.max(mapa.getZoom(), 15), { animate: true }); if (abrir) e.m.openPopup(); }
             },
         };
     }
@@ -486,7 +496,7 @@ const MR = (() => {
         });
     }
 
-    /* ---------------- Actualización periódica (RF-13) ---------------- */
+    /* ---------------- Actualización periódica ---------------- */
 
     /** Ejecuta fn de inmediato y cada intervalo; se pausa si la pestaña no está visible. */
     function sondeo(fn, intervalo = config.actualizacionMs) {
@@ -495,7 +505,7 @@ const MR = (() => {
         const ejecutar = async () => {
             clearTimeout(temporizador);
             if (!activo) return;
-            try { await fn(); } finally {
+            try { await fn(); } catch (e) { /* cada página muestra su propio error */ } finally {
                 if (activo && !document.hidden) temporizador = setTimeout(ejecutar, intervalo);
             }
         };
@@ -510,9 +520,14 @@ const MR = (() => {
         };
     }
 
-    /** Controla un indicador ".mr-actualizacion" con su texto y la etiqueta de datos de demostración. */
+    /** HTML del indicador de actualización; se controla con indicador(elemento). */
+    const htmlIndicador = (texto = 'Cargando información…') => `
+        <span class="mr-punto-vivo"></span><span data-texto>${esc(texto)}</span>
+        <span data-demo class="hidden mr-etiqueta" title="Las ubicaciones de las unidades son simuladas">${icono('science')}Datos de demostración</span>`;
+
     function indicador(elemento) {
         if (!elemento) return { cargando() {}, listo() {}, error() {}, reposo() {} };
+        if (!elemento.querySelector('[data-texto]')) elemento.innerHTML = htmlIndicador();
         const texto = elemento.querySelector('[data-texto]');
         const demo = elemento.querySelector('[data-demo]');
         let ultima = null;
@@ -531,64 +546,70 @@ const MR = (() => {
                 ultima = Date.now();
                 elemento.classList.remove('cargando', 'error');
                 texto.textContent = 'Información actualizada hace unos segundos';
-                if (demo) demo.classList.toggle('d-none', !esDemo);
+                if (demo) demo.classList.toggle('hidden', !esDemo);
             },
             error(mensaje) {
                 elemento.classList.remove('cargando');
                 elemento.classList.add('error');
                 texto.textContent = mensaje || 'No fue posible actualizar. Se reintentará automáticamente.';
             },
-            /** Sin actualización activa (por ejemplo, aún no se elige una ruta). */
             reposo(mensaje) {
                 ultima = null;
                 elemento.classList.remove('cargando', 'error');
                 texto.textContent = mensaje;
-                if (demo) demo.classList.add('d-none');
+                if (demo) demo.classList.add('hidden');
             },
         };
     }
 
-    function htmlVacio(icono, mensaje) {
-        return `<div class="mr-vacio"><i class="bi bi-${icono}"></i>${esc(mensaje)}</div>`;
-    }
-
-    /** Lista de próximas llegadas (respuesta de api/eta.php). */
+    /** Lista de próximas llegadas (respuesta de la consulta "eta"). */
     function htmlLlegadas(rutas, opciones = {}) {
         if (!rutas.length) return htmlVacio('signpost', 'Ninguna ruta pasa por esta parada.');
-        return rutas.map((r) => {
+        return rutas.map((r, indice) => {
             const encabezado = opciones.sinEncabezado ? '' : `
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    ${insigniaRuta(r.ruta, true)}
-                    <div class="flex-grow-1 small"><strong>${esc(r.ruta.nombre)}</strong> · ${esc(r.ruta.sentido)} hacia ${esc(r.ruta.destino)}</div>
-                    <a class="small" href="${url('ruta.php?id=' + r.ruta.id)}">Ver ruta</a>
+                <div class="flex items-center gap-3 mb-3">
+                    ${insigniaRuta(r.ruta)}
+                    <div class="flex-1 min-w-0">
+                        <p class="font-semibold text-on-surface truncate">${esc(r.ruta.nombre)}</p>
+                        <p class="text-xs text-on-surface-variant">${esc(r.ruta.sentido)} · hacia ${esc(r.ruta.destino)}</p>
+                    </div>
+                    <a class="mr-btn mr-btn-secundario mr-btn-sm" href="${url('ruta.html?id=' + r.ruta.id)}">Ver ruta ${icono('arrow_forward')}</a>
                 </div>`;
             let cuerpo;
             if (r.ruta.estado_servicio === 'suspendida') {
-                cuerpo = `<div class="mr-aviso-servicio suspendido small"><i class="bi bi-x-octagon-fill"></i><div>Servicio suspendido${r.ruta.aviso ? ': ' + esc(r.ruta.aviso) : ''}</div></div>`;
+                cuerpo = `<div class="mr-aviso-servicio suspendido">${icono('block', 'relleno text-[20px]')}<div>Servicio suspendido${r.ruta.aviso ? ': ' + esc(r.ruta.aviso) : ''}</div></div>`;
             } else if (r.llegadas.length) {
-                cuerpo = r.llegadas.slice(0, 3).map((l, i) => `
-                    <div class="mr-eta-fila">
-                        <div><div class="fw-semibold">Unidad ${esc(l.unidad)}</div>
-                             <div class="small text-secondary">Ubicación actualizada ${tiempoRelativo(l.actualizado_hace_seg)}</div></div>
-                        <div class="text-end"><div class="${i === 0 ? 'mr-eta-tiempo' : 'fw-bold'}">${esc(l.texto)}</div>
-                             ${i === 0 ? '<div class="small text-secondary">Tiempo aprox. de llegada</div>' : ''}</div>
-                    </div>`).join('');
+                cuerpo = `<div class="grid gap-2">${r.llegadas.slice(0, 3).map((l, i) => `
+                    <div class="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 ${i === 0 ? 'bg-primary text-white shadow-md' : 'bg-surface-container-low'}">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <span class="material-symbols-outlined relleno ${i === 0 ? 'text-secondary-container' : 'text-secondary'}">directions_bus</span>
+                            <div class="min-w-0">
+                                <p class="font-semibold text-sm">Unidad ${esc(l.unidad)}</p>
+                                <p class="text-[11px] ${i === 0 ? 'text-white/70' : 'text-on-surface-variant'}">Ubicación ${tiempoRelativo(l.actualizado_hace_seg)}</p>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <p class="font-extrabold ${i === 0 ? 'text-lg text-secondary-container' : 'text-sm text-primary'}">${esc(l.texto)}</p>
+                            ${i === 0 ? '<p class="text-[10px] uppercase tracking-wider text-white/70">Llegada aprox.</p>' : ''}
+                        </div>
+                    </div>`).join('')}</div>`;
             } else if (r.en_circulacion > 0 && r.sin_ubicacion === r.en_circulacion) {
-                cuerpo = `<div class="small text-secondary"><i class="bi bi-slash-circle"></i> Hay ${r.en_circulacion} unidad(es) en circulación, pero no hay información de ubicación disponible para estimar la llegada.</div>`;
+                cuerpo = `<p class="flex gap-2 text-sm text-on-surface-variant">${icono('location_disabled', 'text-[18px]')} Hay ${r.en_circulacion} unidad(es) en circulación, pero no hay información de ubicación disponible para estimar la llegada.</p>`;
             } else if (r.en_circulacion > 0) {
-                cuerpo = '<div class="small text-secondary"><i class="bi bi-info-circle"></i> Las unidades en circulación ya pasaron por esta parada.</div>';
+                cuerpo = `<p class="flex gap-2 text-sm text-on-surface-variant">${icono('info', 'text-[18px]')} Las unidades en circulación ya pasaron por esta parada.</p>`;
             } else {
-                cuerpo = '<div class="small text-secondary"><i class="bi bi-moon"></i> No hay unidades en circulación en este momento.</div>';
+                cuerpo = `<p class="flex gap-2 text-sm text-on-surface-variant">${icono('bedtime', 'text-[18px]')} No hay unidades en circulación en este momento.</p>`;
             }
             const extraSinUbicacion = r.llegadas.length && r.sin_ubicacion
-                ? `<div class="small text-secondary mt-1"><i class="bi bi-slash-circle"></i> ${r.sin_ubicacion} unidad(es) más sin información de ubicación.</div>` : '';
-            return `<div class="mr-eta mb-2">${encabezado}${cuerpo}${extraSinUbicacion}</div>`;
+                ? `<p class="mt-2 flex gap-1.5 text-xs text-on-surface-variant">${icono('location_disabled', 'text-[16px]')} ${r.sin_ubicacion} unidad(es) más sin información de ubicación.</p>` : '';
+            return `<div class="mr-tarjeta p-4 mr-anim-subir" style="--retraso:${indice * 60}ms">${encabezado}${cuerpo}${extraSinUbicacion}</div>`;
         }).join('');
     }
 
     return {
-        config, url, esc, api, enviar, tiempoRelativo, estadoVehiculo, claseEstado, iconoEstado, insigniaRuta,
-        crearMapa, iconoParada, iconoVehiculo, dibujarRuta, capaVehiculos, mostrarUsuario, popupParada,
-        ubicarUsuario, sondeo, indicador, htmlVacio, htmlLlegadas,
+        config, url, parametro, esc, icono, api, T, tiempoRelativo, estadoVehiculo, claseEstado, iconoEstado, insigniaRuta, insigniasRutas,
+        estadoHtml, avisoServicioHtml, htmlVacio, esqueletos, hayMapa,
+        crearMapa, iconoParada, iconoVehiculo, iconoDestino, dibujarRuta, trazoAnimado, capaVehiculos, mostrarUsuario, popupParada,
+        ubicarUsuario, sondeo, htmlIndicador, indicador, htmlLlegadas,
     };
 })();

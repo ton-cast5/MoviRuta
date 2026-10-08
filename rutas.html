@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rutas de transporte · MoviRuta</title>
+    <meta name="description" content="Todas las rutas de transporte público: origen, destino, paradas, tarifa y estado del servicio.">
+    <meta name="theme-color" content="#004532">
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="assets/css/moviruta.css">
+</head>
+<body class="bg-surface font-sans text-on-surface" data-base="." data-pagina="rutas">
+<a class="saltar-contenido" href="#contenido">Saltar al contenido</a>
+<div id="mr-encabezado" class="fixed inset-x-0 top-0 z-[1500] h-20 bg-primary"></div>
+
+<main id="contenido" class="pt-20">
+    <section id="mr-cabecera" data-titulo="Rutas de transporte" data-icono="route"
+             data-subtitulo="Busca por número, nombre, origen, destino o parada."
+             data-migas='[["Rutas"]]'></section>
+
+    <section class="relative z-10 mx-auto -mt-16 max-w-[1440px] px-margin pb-16 md:px-margin-tablet lg:px-margin-desktop">
+        <form id="formRutas" class="mr-anim-subir rounded-xl bg-surface-container-lowest p-4 shadow-2xl ring-1 ring-black/5 md:p-5" style="--retraso:200ms" role="search">
+            <div class="grid gap-3 md:grid-cols-12 md:items-center">
+                <div class="relative md:col-span-6">
+                    <label class="sr-only" for="q">Buscar ruta</label>
+                    <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-outline">search</span>
+                    <input class="mr-campo !pl-10" type="search" id="q" maxlength="80" placeholder="Ej. 2, Altabrisa, Plaza de Armas…" autocomplete="off">
+                </div>
+                <div class="relative md:col-span-3">
+                    <label class="sr-only" for="linea">Línea</label>
+                    <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[20px] text-outline">hub</span>
+                    <select class="mr-campo !pl-10" id="linea"><option value="">Todas las líneas</option></select>
+                </div>
+                <label class="mr-interruptor md:col-span-3 md:justify-end" title="Solo líneas en las que todas las unidades tienen rampa o espacio para silla de ruedas">
+                    <input type="checkbox" id="soloAccesibles"><span class="pista"></span>
+                    <span class="inline-flex items-center gap-1 font-medium"><span class="material-symbols-outlined text-[20px] text-primary">accessible</span> Solo accesibles</span>
+                </label>
+            </div>
+        </form>
+
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <p id="resumen" class="text-sm text-on-surface-variant" role="status" aria-live="polite"></p>
+            <button type="button" id="limpiar" class="hidden items-center gap-1 text-sm font-semibold text-secondary hover:underline">
+                <span class="material-symbols-outlined text-[18px]">filter_alt_off</span> Mostrar todas las rutas
+            </button>
+        </div>
+        <div id="listaRutas" class="mt-4 grid gap-5 md:grid-cols-2 xl:grid-cols-3"></div>
+    </section>
+</main>
+
+<div id="mr-pie"></div>
+
+<script src="assets/js/datos.js"></script>
+<script src="assets/js/servicios.js"></script>
+<script src="assets/js/moviruta.js"></script>
+<script src="assets/js/interfaz.js"></script>
+<script src="assets/js/rutas.js"></script>
+</body>
+</html>

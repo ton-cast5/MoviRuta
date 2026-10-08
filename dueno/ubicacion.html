@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ubicación de vehículos · MoviRuta</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#004532">
+    <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/moviruta.css">
+</head>
+<body class="bg-surface font-sans text-on-surface" data-base=".." data-pagina="panel" data-rol="dueno">
+<a class="saltar-contenido" href="#contenido">Saltar al contenido</a>
+<div id="mr-encabezado" class="fixed inset-x-0 top-0 z-[1500] h-20 bg-primary"></div>
+
+<div id="mr-panel" data-seccion="ubicacion" data-titulo="Ubicación de vehículos" data-subtitulo="Monitorea en tiempo real las unidades en circulación.">
+    <div id="vista"></div>
+</div>
+
+<div id="mr-pie"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="../assets/js/datos.js"></script>
+<script src="../assets/js/servicios.js"></script>
+<script src="../assets/js/moviruta.js"></script>
+<script src="../assets/js/interfaz.js"></script>
+<script src="../assets/js/panel.js"></script>
+<script src="../assets/js/gestion.js"></script>
+</body>
+</html>

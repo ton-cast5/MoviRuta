@@ -1,7 +1,7 @@
 Options -Indexes
-DirectoryIndex index.php
+DirectoryIndex index.html
 
-<FilesMatch "\.(sql|log|md)$">
+<FilesMatch "\.md$">
     Require all denied
 </FilesMatch>
 

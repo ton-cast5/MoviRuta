@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mapa en tiempo real · MoviRuta</title>
+    <meta name="description" content="Mapa con todas las rutas y la ubicación de las unidades en circulación.">
+    <meta name="theme-color" content="#004532">
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="assets/css/moviruta.css">
+</head>
+<body class="bg-surface font-sans text-on-surface" data-base="." data-pagina="mapa">
+<a class="saltar-contenido" href="#contenido">Saltar al contenido</a>
+<div id="mr-encabezado" class="fixed inset-x-0 top-0 z-[1500] h-20 bg-primary"></div>
+
+<main id="contenido" class="relative pt-20">
+    <div class="mr-mapa-tarjeta mr-mapa-con-panel relative h-[calc(100vh-5rem)] min-h-[560px]">
+        <div id="mapa" class="mr-mapa" role="region" aria-label="Mapa general de rutas y vehículos"></div>
+
+        <aside id="panelMapa" class="mr-mapa-capa mr-anim-subir absolute bottom-3 left-3 right-3 top-auto flex max-h-[55%] flex-col overflow-hidden rounded-2xl bg-white/95 shadow-2xl ring-1 ring-black/5 backdrop-blur md:bottom-6 md:left-6 md:right-auto md:top-6 md:max-h-none md:w-[360px]" style="--retraso:200ms">
+            <div class="relative overflow-hidden bg-primary px-5 pb-5 pt-4 text-white">
+                <div class="mr-hero-luz uno -right-10 -top-16 h-40 w-40 bg-secondary/40 blur-[50px]"></div>
+                <div class="relative flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-label-sm font-label-sm uppercase tracking-widest text-secondary-container">Tiempo real</p>
+                        <h1 class="font-headline-sm text-headline-sm">Mapa de transporte</h1>
+                    </div>
+                    <button type="button" id="btnPlegar" class="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20 md:hidden" aria-label="Plegar panel" aria-expanded="true">
+                        <span class="material-symbols-outlined">expand_more</span>
+                    </button>
+                </div>
+                <div class="relative mt-4 grid grid-cols-3 gap-2 text-center">
+                    <div class="rounded-xl bg-white/10 px-2 py-2"><p class="text-xl font-extrabold text-secondary-container" id="cuentaUnidades">0</p><p class="text-[10px] uppercase tracking-wider text-white/70">Unidades</p></div>
+                    <div class="rounded-xl bg-white/10 px-2 py-2"><p class="text-xl font-extrabold" id="cuentaRutas">0</p><p class="text-[10px] uppercase tracking-wider text-white/70">Rutas</p></div>
+                    <div class="rounded-xl bg-white/10 px-2 py-2"><p class="text-xl font-extrabold" id="cuentaGps">0</p><p class="text-[10px] uppercase tracking-wider text-white/70">Con GPS</p></div>
+                </div>
+            </div>
+            <div id="cuerpoPanel" class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+                <button class="mr-btn mr-btn-primario w-full !py-3" type="button" id="btnUbicacion"><span class="material-symbols-outlined">near_me</span> <span>Rutas cerca de mí</span></button>
+                <div id="mensajeUbicacion" class="text-sm empty:hidden" role="status" aria-live="polite"></div>
+                <div id="cercanas" class="hidden">
+                    <h2 class="mb-2 text-label-sm font-label-sm uppercase tracking-widest text-on-surface-variant">Paradas cercanas</h2>
+                    <div id="listaCercanas" class="flex flex-col gap-2"></div>
+                </div>
+
+                <div>
+                    <div class="mb-2 flex items-center justify-between">
+                        <h2 class="text-label-sm font-label-sm uppercase tracking-widest text-on-surface-variant">Rutas</h2>
+                        <div class="mr-pestanas !p-0.5">
+                            <button class="mr-pestana !px-2.5 !py-1 !text-xs" type="button" id="btnTodas">Todas</button>
+                            <button class="mr-pestana !px-2.5 !py-1 !text-xs" type="button" id="btnNinguna">Ninguna</button>
+                        </div>
+                    </div>
+                    <div id="listaRutas" class="flex flex-col gap-1"></div>
+                </div>
+                <div class="border-t border-surface-container pt-3">
+                    <div class="mr-actualizacion" id="indicador"></div>
+                    <p class="mt-2 flex items-start gap-1.5 text-xs text-on-surface-variant"><span class="material-symbols-outlined text-[16px] text-secondary">directions_bus</span> <span id="resumenVehiculos">—</span></p>
+                </div>
+            </div>
+        </aside>
+    </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="assets/js/datos.js"></script>
+<script src="assets/js/servicios.js"></script>
+<script src="assets/js/moviruta.js"></script>
+<script src="assets/js/interfaz.js"></script>
+<script src="assets/js/mapa.js"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 Options -Indexes
 DirectoryIndex index.html
+AddType application/manifest+json .webmanifest
 
 <FilesMatch "\.md$">
     Require all denied

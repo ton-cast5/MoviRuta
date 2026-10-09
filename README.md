@@ -18,6 +18,13 @@ Se necesita conexión a internet para Tailwind, Leaflet y los mosaicos del mapa.
 
 > Firefox aísla `localStorage` y las fuentes cuando se abren archivos con `file://`; si algo se ve raro o se pierde la sesión al cambiar de página, usa un servidor estático o Chrome/Edge.
 
+### Instalar en el celular (app web)
+
+MoviRuta se puede agregar a la pantalla de inicio y abre a pantalla completa con su propio ícono (`manifest.webmanifest` e íconos en `assets/img/`). Tiene que estar publicado en una dirección **https** (por ejemplo GitHub Pages, Netlify o Vercel); con doble clic (`file://`) no aparece la opción.
+
+- **Android (Chrome):** menú ⋮ → *Agregar a la pantalla principal* / *Instalar app*.
+- **iPhone (Safari):** botón Compartir → *Agregar a inicio*.
+
 ### Cuentas de demostración
 
 Contraseña de todas: `moviruta123` (en *Iniciar sesión* hay botones para entrar con un clic).
@@ -83,11 +90,12 @@ Si alguien abre un panel sin sesión, se le envía a *Iniciar sesión* y luego r
 MoviRuta/
 ├── index.html, rutas.html, ruta.html, paradas.html, parada.html, mapa.html   Consulta pública
 ├── login.html                                                               Iniciar sesión
+├── manifest.webmanifest                                                     App web instalable (nombre, colores e íconos)
 ├── pasajero/  chofer/  dueno/  admin/                                       Panel de cada perfil
 └── assets/
     ├── css/moviruta.css        Estilos propios y animaciones (sobre Tailwind)
     ├── fuentes/                Inter y Material Symbols
-    ├── img/                    Logo y favicon
+    ├── img/                    Logo, favicon e íconos de la app
     └── js/
         ├── tailwind-config.js  Paleta, tipografía y espaciados del diseño
         ├── datos.js            Datos de demostración

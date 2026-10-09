@@ -409,8 +409,9 @@ input[type="color"].mr-campo { padding: .25rem; height: 46px; cursor: pointer; }
 .mr-dato strong { display: block; margin-top: .2rem; font-size: 15px; color: var(--texto); text-transform: none; letter-spacing: 0; font-weight: 700; }
 
 /* ---------- Pie de página ---------- */
-.mr-pie a { transition: color .2s ease, transform .2s ease; display: inline-block; }
-.mr-pie a:hover { transform: translateX(3px); }
+.mr-pie a { transition: color .2s ease, transform .2s ease; }
+.mr-pie li a { display: inline-block; }
+.mr-pie li a:hover { transform: translateX(3px); }
 
 /* ---------- Horarios imprimibles (solo se ven al imprimir) ---------- */
 #horariosImprimibles { display: none; }

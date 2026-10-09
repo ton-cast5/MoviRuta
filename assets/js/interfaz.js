@@ -374,8 +374,8 @@ const MRUI = (() => {
             <div class="mx-auto flex h-20 max-w-[1440px] items-center justify-between gap-4 px-margin md:px-margin-tablet lg:px-margin-desktop">
                 <div class="flex items-center gap-6 lg:gap-10">
                     <a href="${url('index.html')}" class="group flex items-center gap-3">
-                        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/95 p-1.5 shadow-md transition-transform duration-500 group-hover:rotate-[-8deg] group-hover:scale-105">
-                            <img src="${url('assets/img/logo.svg')}" alt="" class="h-full w-full">
+                        <span class="flex h-11 items-center rounded-xl bg-white px-2.5 shadow-md transition-transform duration-500 group-hover:-rotate-3 group-hover:scale-105">
+                            <img src="${url('assets/img/logo.svg')}" alt="" width="59" height="28" class="h-7 w-auto">
                         </span>
                         <span class="font-headline-md text-headline-md font-bold tracking-tight text-white">Movi<span class="text-secondary-container">Ruta</span></span>
                     </a>
@@ -445,7 +445,7 @@ const MRUI = (() => {
             <div class="relative mx-auto grid max-w-[1440px] gap-10 px-margin py-14 md:grid-cols-2 md:px-margin-tablet lg:grid-cols-4 lg:px-margin-desktop">
                 <div class="mr-revelar">
                     <a href="${url('index.html')}" class="flex items-center gap-3">
-                        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1.5"><img src="${url('assets/img/logo.svg')}" alt="" class="h-full w-full"></span>
+                        <span class="flex h-11 items-center rounded-xl bg-white px-2.5"><img src="${url('assets/img/logo.svg')}" alt="" width="59" height="28" class="h-7 w-auto"></span>
                         <span class="text-headline-sm font-headline-sm font-bold">Movi<span class="text-secondary-container">Ruta</span></span>
                     </a>
                     <p class="mt-4 text-sm leading-relaxed text-white/70">Sistema Integral de Información y Planificación del Transporte Público MoviRuta. Conectando personas y ciudades con certeza en tiempo real.</p>
@@ -623,7 +623,6 @@ const MRUI = (() => {
         const p = document.querySelector('[data-subtitulo-panel]');
         if (h1 && titulo !== undefined) h1.textContent = titulo;
         if (p && subtitulo !== undefined) p.textContent = subtitulo;
-        if (titulo) document.title = `${titulo} · MoviRuta`;
     }
 
     /* ---------------- Arranque ---------------- */

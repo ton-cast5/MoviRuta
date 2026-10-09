@@ -16,7 +16,6 @@
     const { parada } = datos;
     const rutas = S.consulta.rutasDeParada(parada.id);
     S.historial.registrar(null, parada.id);
-    document.title = `Parada ${parada.nombre} · MoviRuta`;
 
     MRUI.cabecera({
         titulo: parada.nombre,

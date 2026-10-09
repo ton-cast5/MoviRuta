@@ -653,7 +653,7 @@
         const fecha = T.formatoFecha(Date.now());
         $('horariosImprimibles').innerHTML = `
             <header style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #004532;padding-bottom:4mm;margin-bottom:6mm">
-                <div style="display:flex;align-items:center;gap:10px"><img src="${MR.url('assets/img/logo.svg')}" alt="" width="36" height="36">
+                <div style="display:flex;align-items:center;gap:10px"><img src="${MR.url('assets/img/logo.svg')}" alt="" width="76" height="36">
                 <div><strong style="font-size:20px;color:#004532">MoviRuta</strong><div style="font-size:12px;color:#3f4944">Itinerarios y tiempos estimados de paso</div></div></div>
                 <div style="font-size:11px;color:#6f7973;text-align:right">Impreso el ${esc(fecha)}<br>Los tiempos son aproximados y pueden variar con el tráfico.</div>
             </header>

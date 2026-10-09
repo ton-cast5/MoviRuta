@@ -2,17 +2,67 @@
 
 **Movilidad + Ruta.** Sistema web de consulta y seguimiento del transporte público: rutas, paradas, vehículos, ubicación y tiempo estimado de llegada (ETA), con cuatro perfiles: pasajero, chofer, dueño de línea y administrador general.
 
-Stack: HTML5 · Tailwind CSS (CDN) · JavaScript sin frameworks · Leaflet.js con mosaicos de Google Maps. **No necesita servidor, PHP ni base de datos.**
+Stack: HTML5 · Tailwind CSS (CDN) · JavaScript sin frameworks · Leaflet.js con mosaicos de Google Maps · API en PHP 8 · base de datos MySQL **MoviRuta**.
+
+El sitio funciona de dos formas:
+
+- **Con base de datos** (WAMP en tu computadora, o Vercel con un MySQL en la nube): todo lo que se guarda en los paneles va a MySQL y el servidor valida la sesión y los permisos.
+- **Sin servidor** (doble clic en `index.html`, GitHub Pages): usa los datos de demostración guardados en el navegador. Útil para enseñar el diseño, pero no guarda nada en la base de datos.
+
+La página detecta sola en qué modo está; en el pie dice "Conectado a la base de datos MoviRuta" cuando usa MySQL.
 
 ---
 
-## Cómo abrirlo
+## Cómo abrirlo con la base de datos (WAMP + MySQL Workbench)
+
+1. Enciende WAMP (MySQL en el puerto 3306, usuario `root` sin contraseña).
+2. En MySQL Workbench abre y ejecuta completo `database/moviruta.sql` (crea la base **MoviRuta** con sus tablas, llaves foráneas y vistas) y después `database/datos_demo.sql` (datos de demostración). ⚠️ `moviruta.sql` borra la base si ya existía.
+3. El archivo `D:\wamp64\alias\moviruta.conf` publica la carpeta en Apache:
+   ```apache
+   Alias /MoviRuta "D:/MoviRuta/"
+   <Directory "D:/MoviRuta/">
+     Options -Indexes +FollowSymLinks
+     AllowOverride all
+     Require local
+   </Directory>
+   ```
+   Reinicia los servicios de WAMP y abre `http://localhost/MoviRuta/`.
+4. Si tu MySQL usa otra contraseña o puerto, crea `api/config.local.php` (no se sube a git): `<?php return ['password' => 'mi-clave', 'puerto' => 3307];`
+
+Sin Apache también sirve el servidor de PHP: `php -S 127.0.0.1:8090` dentro de la carpeta y abrir `http://127.0.0.1:8090/`.
+
+### Base de datos
+
+- Catálogos: `rol`, `sentido_ruta`, `estado_servicio`, `estado_viaje`, `estado_reporte`, `tipo_falla`, `estado_falla`.
+- Tablas: `usuario`, `linea_transporte`, `chofer`, `vehiculo`, `parada`, `ruta`, `ruta_parada` (paradas en orden), `recorrido_punto` (trazado), `viaje`, `reporte_accidente`, `falla_vehiculo`, `historial_consulta` y `sesion` (sesiones de la API).
+- Vistas para consultar desde Workbench: `vista_rutas`, `vista_viajes_en_curso`, `vista_fallas_abiertas`.
+- Las contraseñas se guardan cifradas con bcrypt.
+
+## Publicar en Vercel con base de datos
+
+Vercel no puede usar el MySQL de tu computadora, así que la base va en un MySQL en la nube; la API en PHP corre en Vercel con `vercel-php` (ya configurado en `vercel.json`).
+
+1. **Crea un MySQL en la nube** gratuito, por ejemplo [TiDB Cloud](https://tidbcloud.com) (compatible con MySQL; elige la región AWS *N. Virginia / us-east-1*, cerca de los servidores de Vercel) o [Aiven for MySQL](https://aiven.io/mysql).
+2. **Conéctalo en MySQL Workbench** con el host, puerto, usuario y contraseña que te da el proveedor (en la pestaña *SSL* pon *Use SSL: Require*) y ejecuta `database/moviruta.sql` y luego `database/datos_demo.sql`.
+3. **En Vercel → tu proyecto → Settings → Environment Variables** agrega:
+
+   | Variable | Valor |
+   |---|---|
+   | `DB_HOST` | host del proveedor |
+   | `DB_PORT` | puerto (TiDB: 4000) |
+   | `DB_USER` | usuario |
+   | `DB_PASSWORD` | contraseña |
+   | `DB_NAME` | `MoviRuta` |
+   | `DB_SSL_CA` | solo si el proveedor te da su certificado (Aiven): guarda el `ca.pem` en `api/` y pon `ca.pem` |
+
+4. **Vuelve a publicar** (un `git push` o *Deployments → Redeploy*). Para comprobarlo, abre `https://tu-sitio.vercel.app/api/bd.php`: debe responder `{"ok":true,...}`.
+
+Si la base no responde, el sitio sigue funcionando con los datos de demostración y muestra un aviso.
+
+## Cómo abrirlo sin servidor
 
 - **Doble clic** en `index.html` (recomendado con Chrome o Edge).
-- O con un servidor estático, que es lo más fiel a un despliegue real:
-  - Extensión *Live Server* de VS Code / Cursor: clic derecho en `index.html` → *Open with Live Server*.
-  - Python: `python -m http.server 5173` y abrir `http://127.0.0.1:5173/`.
-  - Apache (XAMPP/WAMP): copiar la carpeta a `htdocs`/`www`; el `.htaccess` ya usa `index.html` como portada.
+- O con un servidor estático: extensión *Live Server* de VS Code / Cursor, o `python -m http.server 5173`.
 
 Se necesita conexión a internet para Tailwind, Leaflet y los mosaicos del mapa. Las fuentes (Inter y Material Symbols) están incluidas en `assets/fuentes/`.
 
@@ -44,12 +94,9 @@ Contraseña de todas: `moviruta123` (en *Iniciar sesión* hay botones para entra
 
 ### Dónde se guardan los datos
 
-- Los datos iniciales están en `assets/js/datos.js` (`window.MR_DATOS_DEMO`).
-- Al abrir el sitio por primera vez se copian a `localStorage` (clave `moviruta.bd`); a partir de ahí, todo lo que se crea o edita en los paneles (líneas, rutas, paradas, viajes, reportes…) se guarda **solo en ese navegador**.
-- La sesión vive en `localStorage` (`moviruta.sesion`), así que se comparte entre pestañas; cerrar sesión en una la cierra en todas.
-- **Restablecer la demo:** botón *Restablecer datos de demostración* en el pie de página (o borrar los datos del sitio en el navegador).
+**Con base de datos:** al abrir cada página, `api/bd.php` entrega los datos que el usuario puede ver; cada cambio se manda a `api/guardar.php`, que revisa la sesión y los permisos con los datos de MySQL (un chofer solo maneja unidades de su línea, un dueño solo administra sus líneas, etc.) y guarda todo en una transacción. El inicio de sesión (`api/sesion.php`) bloquea un minuto después de 5 intentos fallidos.
 
-Como no hay servidor, el inicio de sesión y los permisos son una **simulación** para la demo: sirven para la navegación y la experiencia de uso, pero no protegen nada. Para un despliegue real se necesitaría un backend que valide la sesión y los permisos.
+**Sin servidor:** los datos iniciales de `assets/js/datos.js` se copian a `localStorage` (clave `moviruta.bd`) y lo que se edita se guarda **solo en ese navegador**; el botón *Restablecer datos de demostración* del pie los regresa al inicio. En este modo el inicio de sesión y los permisos son una simulación que no protege nada.
 
 ---
 
@@ -59,9 +106,9 @@ Como no hay servidor, el inicio de sesión y los permisos son una **simulación*
 Inicio · Rutas · Paradas · Mapa · Iniciar sesión
                                      └── Identificación del rol
                                           ├── Pasajero        → panel, historial
-                                          ├── Chofer          → perfil, iniciar viaje (con pasajeros al salir), viaje actual, historial
-                                          ├── Dueño de línea  → choferes, vehículos, rutas, paradas, ubicación, reportes (solo su línea)
-                                          └── Administrador   → líneas, usuarios, choferes, vehículos, rutas, paradas, ubicación, reportes
+                                          ├── Chofer          → perfil, iniciar viaje (con pasajeros al salir), viaje actual, fallas de unidad, historial
+                                          ├── Dueño de línea  → choferes, vehículos, fallas, rutas, paradas, ubicación, reportes (solo su línea)
+                                          └── Administrador   → líneas, usuarios, choferes, vehículos, fallas, rutas, paradas, ubicación, reportes
 ```
 
 Si alguien abre un panel sin sesión, se le envía a *Iniciar sesión* y luego regresa a la página que pidió. Si abre el panel de otro perfil, se le lleva al suyo.
@@ -81,6 +128,7 @@ Si alguien abre un panel sin sesión, se le envía a *Iniciar sesión* y luego r
 - **Editor de rutas**: datos de la ruta, paradas en orden (agregar desde la lista o haciendo clic en el mapa, reordenar arrastrando o con flechas) y trazado dibujado sobre el mapa (o generado uniendo las paradas).
 - **Editor de paradas**: se coloca con un clic en el mapa y el marcador se puede arrastrar. El dueño de línea puede registrar paradas nuevas; solo el administrador modifica las existentes.
 - **Ubicación de vehículos**: flota de la línea (o de todas, para el administrador) en el mapa en tiempo real.
+- **Fallas de vehículos**: el chofer reporta detalles de la unidad (llanta ponchada, clima que no enfría, frenos, puertas, rampa…) y si le impiden circular; el dueño de la línea la pasa a *en reparación* y luego a *resuelta* con una nota. Mientras una falla que impide circular esté abierta, la unidad no se puede usar para iniciar viajes; si la falla es del clima o de la rampa, los pasajeros dejan de ver la unidad como climatizada o accesible.
 
 ---
 
@@ -92,6 +140,9 @@ MoviRuta/
 ├── login.html                                                               Iniciar sesión
 ├── manifest.webmanifest                                                     App web instalable (nombre, colores e íconos)
 ├── pasajero/  chofer/  dueno/  admin/                                       Panel de cada perfil
+├── api/                                                                     API en PHP (bd.php, sesion.php, guardar.php, config.php)
+├── database/                                                                moviruta.sql (esquema) y datos_demo.sql
+├── vercel.json, .vercelignore                                               Publicación en Vercel
 └── assets/
     ├── css/moviruta.css        Estilos propios y animaciones (sobre Tailwind)
     ├── fuentes/                Inter y Material Symbols
@@ -99,7 +150,7 @@ MoviRuta/
     └── js/
         ├── tailwind-config.js  Paleta, tipografía y espaciados del diseño
         ├── datos.js            Datos de demostración
-        ├── servicios.js        "Backend" simulado: datos en localStorage, sesión, búsqueda, ETA, gestión
+        ├── servicios.js        Datos (de la API o de localStorage), sesión, búsqueda, ETA, gestión
         ├── moviruta.js         Utilidades comunes y mapas (Leaflet)
         ├── interfaz.js         Encabezado, menú, pie, panel lateral, avisos, diálogos y animaciones
         ├── panel.js            Formularios, tablas y utilidades de los paneles
@@ -118,7 +169,3 @@ Orden de carga de los scripts: `tailwind-config.js` → `datos.js` → `servicio
 ## Mapa
 
 Leaflet con mosaicos de Google (Mapa y Satélite) cargados directamente desde sus servidores, sin clave de API. Las condiciones de uso de Google piden usar su API oficial, así que para un despliegue público conviene cambiar a OpenStreetMap o contratar la API.
-
----
-
-La versión anterior en PHP + MySQL sigue disponible en el historial de git.

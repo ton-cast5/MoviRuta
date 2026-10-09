@@ -86,8 +86,8 @@
                     aceptar: 'Borrar historial', peligro: true, icono: 'delete',
                 });
                 if (!ok) return;
-                S.historial.borrar(u.id);
-                MRUI.aviso('Tu historial de consultas se borró.');
+                if (S.historial.borrar(u.id)) MRUI.aviso('Tu historial de consultas se borró.');
+                else MRUI.aviso('No se pudo borrar tu historial. Intenta de nuevo.', 'advertencia');
                 pintar();
             });
         };

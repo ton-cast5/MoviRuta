@@ -17,7 +17,7 @@
         inicio: esAdmin ? inicioAdmin : inicioDueno,
         lineas: esAdmin ? lineas : null,
         usuarios: esAdmin ? usuarios : null,
-        choferes, vehiculos, rutas, paradas, ubicacion, reportes,
+        choferes, vehiculos, fallas, rutas, paradas, ubicacion, reportes,
     };
     (secciones[P.seccion] || (() => P.noEncontrado('Esta sección no existe.', 'index', 'Volver al resumen')))();
 
@@ -44,6 +44,7 @@
             ['Rutas', suma('total_rutas'), 'route', P.enlace('rutas')],
             ['Paradas activas', G.contarParadasActivas(), 'location_on', P.enlace('paradas')],
             ['Vehículos', suma('total_vehiculos'), 'directions_bus', P.enlace('vehiculos')],
+            ['Fallas abiertas', S.fallas.contarAbiertas(null), 'car_repair', P.enlace('fallas')],
             ['Choferes', suma('total_choferes'), 'id_card', P.enlace('choferes')],
             ['En circulación', G.contarEnCurso(), 'sensors', P.enlace('ubicacion')],
             ['Pasajeros', porRol.pasajero || 0, 'group', P.enlace('usuarios', 'rol=pasajero')],
@@ -78,6 +79,7 @@
         const stats = [
             ['Rutas', suma('total_rutas'), 'route', P.enlace('rutas')],
             ['Vehículos', suma('total_vehiculos'), 'directions_bus', P.enlace('vehiculos')],
+            ['Fallas abiertas', S.fallas.contarAbiertas(ids), 'car_repair', P.enlace('fallas')],
             ['Choferes', suma('total_choferes'), 'id_card', P.enlace('choferes')],
             ['En circulación', G.contarEnCurso(ids), 'sensors', P.enlace('ubicacion')],
         ];
@@ -256,7 +258,10 @@
                         <td class="text-sm">${v.capacidad || '—'}</td>
                         <td>${v.cuenta_con_gps ? `<span title="Con dispositivo de ubicación" class="text-secondary">${icono('sensors')}</span>` : `<span title="Sin dispositivo de ubicación" class="text-outline">${icono('location_disabled')}</span>`}</td>
                         <td><span class="flex gap-1">${equipo(v)}</span></td>
-                        <td>${!v.activo ? `<span class="mr-estado suspendido">${icono('block')}Inactivo</span>` : v.ruta_en_curso !== null ? `<span class="mr-estado normal">${icono('sensors')}En ruta ${esc(v.ruta_en_curso)}</span>` : `<span class="mr-etiqueta">${icono('check_circle', 'text-secondary')}Disponible</span>`}</td>
+                        <td>
+                            ${!v.activo ? `<span class="mr-estado suspendido">${icono('block')}Inactivo</span>` : v.ruta_en_curso !== null ? `<span class="mr-estado normal">${icono('sensors')}En ruta ${esc(v.ruta_en_curso)}</span>` : v.fuera_de_servicio ? `<span class="mr-estado suspendido">${icono('car_repair')}Fuera de servicio</span>` : `<span class="mr-etiqueta">${icono('check_circle', 'text-secondary')}Disponible</span>`}
+                            ${v.fallas_abiertas ? `<a class="mr-enlace mt-1 flex items-center gap-1 text-xs" href="${P.enlace('fallas', `vehiculo=${v.id}`)}">${icono('warning', 'text-[15px]')}${v.fallas_abiertas} falla(s) abierta(s)</a>` : ''}
+                        </td>
                         <td class="text-right">${P.btnEditar(P.enlace('vehiculos', `accion=editar&id=${v.id}`))}</td>
                     </tr>`)) : `<div class="mr-tarjeta">${MR.htmlVacio('directions_bus', 'Aún no hay vehículos registrados.')}</div>`);
             return;
@@ -290,6 +295,116 @@
             </form>`;
         P.alGuardar(document.getElementById('formulario'), (datos) => G.guardarVehiculo(vehiculo?.id || null, datos, ids),
             { volverA: `${u.rol}/vehiculos.html`, mensaje: vehiculo ? 'El vehículo se actualizó.' : 'Vehículo registrado.' });
+    }
+
+    /* ================= Fallas de vehículos ================= */
+
+    function fallas() {
+        const unidades = G.vehiculos(ids);
+        if (!lineasDisponibles.length) { P.vista.innerHTML = sinLineas(); return; }
+
+        if (P.accion === 'nuevo') {
+            const pedida = Number(MR.parametro('vehiculo')) || '';
+            P.vista.innerHTML = `
+                ${P.migas('Fallas de vehículos', 'fallas', 'Registrar')}
+                ${P.encabezado('Registrar falla', 'Anota un detalle o descompostura que detectaste en una unidad.')}
+                <form id="formulario" class="mr-tarjeta max-w-3xl p-6" novalidate>
+                    <div class="grid gap-4 md:grid-cols-2">
+                        ${P.campo('vehiculo_id', 'Unidad', P.selector('vehiculo_id', unidades.map((v) => [v.id, `${v.numero_unidad} · ${v.placa} (${v.linea})`]), pedida, 'Selecciona la unidad', 'required'))}
+                        ${P.campo('tipo', 'Tipo de falla', P.selector('tipo', Object.entries(S.fallas.TIPOS).map(([k, t]) => [k, t.texto]), '', 'Selecciona el tipo', 'required'))}
+                        ${P.campo('descripcion', 'Detalles', '<textarea class="mr-campo" id="descripcion" name="descripcion" rows="3" maxlength="500"></textarea>', { clase: 'md:col-span-2', opcional: true })}
+                        <div class="md:col-span-2">${P.interruptor('impide_circular', 'La unidad no puede circular hasta que se repare', false)}</div>
+                    </div>
+                    ${P.pieFormulario(P.enlace('fallas'), 'Registrar falla')}
+                </form>`;
+            P.alGuardar(document.getElementById('formulario'), (datos) => S.fallas.reportar(u, datos, ids),
+                { volverA: `${u.rol}/fallas.html`, mensaje: 'Falla registrada.' });
+            return;
+        }
+
+        let filtro = ['abiertas', 'resueltas', 'todas'].includes(MR.parametro('estado')) ? MR.parametro('estado') : 'abiertas';
+        const vehiculoId = Number(MR.parametro('vehiculo')) || null;
+        const unidad = vehiculoId ? unidades.find((v) => v.id === vehiculoId) : null;
+        P.vista.innerHTML = `
+            ${P.encabezado('Fallas de vehículos', 'Llantas ponchadas, clima descompuesto y otros detalles que reportan los choferes. Las unidades con una falla que les impide circular no se pueden usar para iniciar viajes.',
+                P.boton('Registrar falla', P.enlace('fallas', `accion=nuevo${unidad ? `&vehiculo=${unidad.id}` : ''}`)))}
+            <div class="mb-5 flex flex-wrap items-center gap-3">
+                <div class="mr-pestanas w-fit" role="tablist" id="filtroFallas">
+                    <button class="mr-pestana" type="button" data-estado="abiertas">Abiertas</button>
+                    <button class="mr-pestana" type="button" data-estado="resueltas">Resueltas</button>
+                    <button class="mr-pestana" type="button" data-estado="todas">Todas</button>
+                </div>
+                ${unidad ? `<a class="mr-etiqueta hover:bg-surface-container-high" href="${P.enlace('fallas')}" title="Quitar filtro">${icono('directions_bus', 'text-[16px]')} Unidad ${esc(unidad.numero_unidad)} ${icono('close', 'text-[16px]')}</a>` : ''}
+            </div>
+            <div id="listaFallas" class="flex flex-col gap-4"></div>`;
+        const coincide = (estado) => (f) => (estado === 'todas' || (estado === 'resueltas') === (f.estado === 'resuelta'));
+        const pintar = () => {
+            const todas = S.fallas.listar(ids, vehiculoId);
+            const lista = todas.filter(coincide(filtro));
+            document.querySelectorAll('#filtroFallas [data-estado]').forEach((b) => {
+                const n = todas.filter(coincide(b.dataset.estado)).length;
+                b.classList.toggle('activa', b.dataset.estado === filtro);
+                b.setAttribute('aria-selected', String(b.dataset.estado === filtro));
+                b.innerHTML = `${{ abiertas: 'Abiertas', resueltas: 'Resueltas', todas: 'Todas' }[b.dataset.estado]} <span class="ml-1 rounded-full bg-black/10 px-1.5 text-[11px]">${n}</span>`;
+            });
+            document.getElementById('listaFallas').innerHTML = lista.length ? lista.map((f, i) => P.tarjetaFalla(f, i, [
+                f.estado === 'pendiente' ? `<button class="mr-btn mr-btn-contorno mr-btn-sm" type="button" data-atender="${f.id}" data-estado="en_reparacion">${icono('build')} En reparación</button>` : '',
+                f.estado !== 'resuelta' ? `<button class="mr-btn mr-btn-primario mr-btn-sm" type="button" data-atender="${f.id}" data-estado="resuelta">${icono('task_alt')} Marcar resuelta</button>` : '',
+            ].join(''))).join('') : `<div class="mr-tarjeta">${MR.htmlVacio('verified', filtro === 'abiertas' ? 'No hay fallas abiertas. ¡Todas las unidades están en orden!' : 'No hay fallas registradas.')}</div>`;
+        };
+        document.getElementById('filtroFallas').addEventListener('click', (e) => {
+            const b = e.target.closest('[data-estado]');
+            if (!b) return;
+            filtro = b.dataset.estado;
+            const q = new URLSearchParams(location.search);
+            q.set('estado', filtro);
+            history.replaceState(null, '', `?${q}`);
+            pintar();
+        });
+        document.getElementById('listaFallas').addEventListener('click', async (e) => {
+            const b = e.target.closest('[data-atender]');
+            if (!b) return;
+            const id = Number(b.dataset.atender);
+            const estado = b.dataset.estado;
+            const nota = await pedirNota(estado);
+            if (nota === null) return;
+            const { errores } = S.fallas.atender(id, u, ids, estado, nota);
+            if (errores.length) MRUI.aviso(errores[0], 'advertencia');
+            else MRUI.aviso(estado === 'resuelta' ? 'La falla se marcó como resuelta.' : 'La falla quedó en reparación.');
+            pintar();
+        });
+        pintar();
+    }
+
+    /** Pide una nota opcional al cambiar el estado de una falla. Devuelve null si se cancela. */
+    function pedirNota(estado) {
+        const resolver = estado === 'resuelta';
+        return new Promise((terminar) => {
+            const modal = document.createElement('div');
+            modal.className = 'mr-modal';
+            modal.setAttribute('role', 'dialog');
+            modal.setAttribute('aria-modal', 'true');
+            modal.innerHTML = `
+                <form class="mr-modal-panel max-w-md p-6" novalidate>
+                    <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-secondary-container/50 text-secondary">${icono(resolver ? 'task_alt' : 'build', 'relleno text-[30px]')}</div>
+                    <h2 class="text-headline-sm font-headline-sm text-on-surface">${resolver ? 'Marcar la falla como resuelta' : 'Mandar la unidad a reparación'}</h2>
+                    <p class="mt-1 text-sm text-on-surface-variant">${resolver ? 'La unidad podrá volver a circular si no tiene otras fallas que lo impidan.' : 'La falla seguirá abierta hasta que la marques como resuelta.'}</p>
+                    ${P.campo('nota_solucion', resolver ? '¿Qué se reparó?' : 'Nota', `<textarea class="mr-campo" id="nota_solucion" name="nota_solucion" rows="3" maxlength="255" placeholder="${resolver ? 'Ej. Se cambió la llanta por una nueva.' : 'Ej. Se llevó al taller de la línea.'}"></textarea>`, { clase: 'mt-4', opcional: true })}
+                    <div class="mt-6 flex justify-end gap-3">
+                        <button type="button" class="mr-btn mr-btn-secundario" data-cerrar-modal>Cancelar</button>
+                        <button type="submit" class="mr-btn mr-btn-primario">${icono('check')} ${resolver ? 'Marcar resuelta' : 'Guardar'}</button>
+                    </div>
+                </form>`;
+            let valor = null;
+            modal.querySelector('form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                valor = modal.querySelector('textarea').value;
+                MRUI.cerrarModal(modal);
+            });
+            modal.addEventListener('mr:cerrado', () => { modal.remove(); terminar(valor); });
+            document.body.appendChild(modal);
+            MRUI.abrirModal(modal);
+        });
     }
 
     /* ================= Rutas ================= */

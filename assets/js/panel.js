@@ -139,8 +139,46 @@ const MRP = (() => {
     const estadoActivo = (activo, si = 'Activo', no = 'Inactivo') =>
         activo ? `<span class="mr-etiqueta">${icono('check_circle', 'text-secondary')}${esc(si)}</span>` : `<span class="mr-estado suspendido">${icono('block')}${esc(no)}</span>`;
 
+    /* ---------- Fallas de vehículos ---------- */
+
+    const estadoFalla = (estado) => ({
+        pendiente: `<span class="mr-estado suspendido">${icono('pending_actions')}Pendiente</span>`,
+        en_reparacion: `<span class="mr-estado aviso">${icono('build')}En reparación</span>`,
+    }[estado] || `<span class="mr-etiqueta">${icono('task_alt', 'text-secondary')}Resuelta</span>`);
+
+    function tarjetaFalla(f, i = 0, acciones = '') {
+        const { T } = MR;
+        const tipo = MRServicios.fallas.TIPOS[f.tipo] || MRServicios.fallas.TIPOS.otro;
+        const abierta = f.estado !== 'resuelta';
+        const borde = abierta ? (f.impide_circular ? 'border-l-4 border-l-error' : 'border-l-4 border-l-[color:var(--aviso)]') : '';
+        return `
+            <article class="mr-tarjeta p-5 mr-anim-subir ${borde}" style="--retraso:${Math.min(i, 10) * 50}ms">
+                <div class="flex flex-wrap items-start gap-4">
+                    <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${abierta ? 'bg-error-container text-error' : 'bg-surface-container text-on-surface-variant'}">${icono(tipo.icono)}</span>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-semibold">${esc(tipo.texto)}</span>
+                            ${estadoFalla(f.estado)}
+                            ${abierta && f.impide_circular ? `<span class="mr-estado suspendido">${icono('block')}No puede circular</span>` : ''}
+                        </div>
+                        <p class="text-xs text-on-surface-variant">Unidad ${esc(f.numero_unidad)} · ${esc(f.placa)} · ${esc(f.linea)} · ${esc(T.formatoFecha(f.creado_en))}</p>
+                        ${f.descripcion ? `<p class="mt-3 text-on-surface">${esc(f.descripcion)}</p>` : ''}
+                        <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+                            <span class="flex items-center gap-1">${icono('person', 'text-[16px]')} Reportó ${esc(f.reportante || '—')}</span>
+                            ${f.viaje_id ? `<span class="flex items-center gap-1">${icono('route', 'text-[16px]')} Detectada durante un viaje</span>` : ''}
+                            ${f.atendio ? `<span class="flex items-center gap-1">${icono('engineering', 'text-[16px]')} Atendió ${esc(f.atendio)}</span>` : ''}
+                            ${f.resuelto_en ? `<span class="flex items-center gap-1">${icono('verified', 'text-[16px]')} Resuelta el ${esc(T.formatoFecha(f.resuelto_en))}</span>` : ''}
+                        </div>
+                        ${f.nota_solucion ? `<p class="mt-2 rounded-lg bg-surface-container-low px-3 py-2 text-sm">${icono('build', 'text-[16px] align-[-3px] text-secondary')} ${esc(f.nota_solucion)}</p>` : ''}
+                    </div>
+                    ${acciones ? `<div class="flex flex-wrap gap-2">${acciones}</div>` : ''}
+                </div>
+            </article>`;
+    }
+
     return {
         vista, seccion, accion, id, enlace, encabezado, migas, boton, tabla, btnEditar,
         campo, entrada, selector, interruptor, leer, errores, alGuardar, pieFormulario, noEncontrado, estadistica, estadoActivo,
+        estadoFalla, tarjetaFalla,
     };
 })();

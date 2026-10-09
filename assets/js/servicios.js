@@ -1,7 +1,8 @@
 /**
- * MoviRuta · datos y lógica sin servidor.
- * La primera vez se copian los datos de demostración (datos.js) a localStorage; todo lo que se modifica en los
- * paneles se guarda ahí y se comparte entre las pestañas del mismo navegador.
+ * MoviRuta · datos y lógica de la aplicación.
+ * Con servidor (Apache + PHP + MySQL) los datos se leen de la base MoviRuta mediante api/bd.php y cada cambio se
+ * envía a api/guardar.php, que valida permisos y lo guarda. Sin servidor (doble clic, GitHub Pages) se usan los datos
+ * de demostración de datos.js guardados en localStorage.
  * MRServicios.api(endpoint, parámetros) responde con la misma forma que tenía la antigua API JSON.
  */
 const MRServicios = (() => {
@@ -30,6 +31,9 @@ const MRServicios = (() => {
             ...r, creado_en: ahora - hace * MIN, revisado_en: revisado === null ? null : ahora - revisado * MIN,
         }));
         d.historial = d.historial.map(({ hace_min: hace, ...h }) => ({ ...h, consultado_en: ahora - hace * MIN }));
+        d.fallas = d.fallas.map(({ hace_min: hace, resuelto_hace_min: resuelto, ...f }) => ({
+            ...f, creado_en: ahora - hace * MIN, resuelto_en: resuelto === null ? null : ahora - resuelto * MIN,
+        }));
         return d;
     }
 
@@ -47,19 +51,112 @@ const MRServicios = (() => {
         return nuevo;
     }
 
-    let bd = cargar();
+    /* ---------------- Servidor (base de datos MySQL) ---------------- */
+
+    const TABLAS = ['usuarios', 'lineas', 'choferes', 'vehiculos', 'paradas', 'rutas', 'viajes', 'reportes', 'fallas', 'historial'];
+    const RAIZ_API = (() => {
+        const src = document.currentScript?.src || '';
+        return /^https?:/.test(src) ? src.replace(/assets\/js\/servicios\.js(\?.*)?$/, 'api/') : null;
+    })();
+
+    function errorServidor(mensaje, codigo, conRespuesta) {
+        const e = new Error(mensaje);
+        Object.assign(e, { servidor: true, codigo, conRespuesta });
+        return e;
+    }
+
+    /** Petición síncrona a la API para conservar la interfaz síncrona del resto de la aplicación. */
+    function pedir(archivo, cuerpo = null) {
+        const xhr = new XMLHttpRequest();
+        xhr.open(cuerpo ? 'POST' : 'GET', RAIZ_API + archivo, false);
+        xhr.setRequestHeader('X-MoviRuta', '1');
+        if (cuerpo) xhr.setRequestHeader('Content-Type', 'application/json');
+        try { xhr.send(cuerpo ? JSON.stringify(cuerpo) : null); } catch (e) {
+            throw errorServidor('No se pudo conectar con el servidor. Revisa que WAMP esté encendido.', 0, false);
+        }
+        let r = null;
+        try { r = JSON.parse(xhr.responseText); } catch (e) { /* no es una respuesta de la API */ }
+        if (!r || typeof r !== 'object') throw errorServidor('El servidor respondió algo inesperado.', xhr.status, false);
+        if (!r.ok) throw errorServidor(r.mensaje || 'No se pudo completar la operación.', xhr.status, true);
+        return r;
+    }
+
+    let bd;
+    let copiaServidor = null;
+    let avisoServidor = null;
+
+    function aplicarRespuesta(r) {
+        bd = r.bd;
+        copiaServidor = JSON.parse(JSON.stringify(bd));
+        cacheGeometria.clear();
+        if (r.sesion_usuario_id) localStorage.setItem(CLAVE_SESION, String(r.sesion_usuario_id));
+        else localStorage.removeItem(CLAVE_SESION);
+    }
+
+    function conectar() {
+        if (!RAIZ_API) return false;
+        try {
+            aplicarRespuesta(pedir('bd.php'));
+            return true;
+        } catch (e) {
+            if (e.conRespuesta) avisoServidor = `${e.message} Se muestran datos de demostración que no se guardan en la base de datos.`;
+            return false;
+        }
+    }
+
+    /** Filas nuevas, modificadas y borradas desde la última vez que se leyó la base de datos. */
+    function diferencias() {
+        const cambios = {};
+        for (const t of TABLAS) {
+            const antes = new Map(copiaServidor[t].map((f) => [f.id, JSON.stringify(f)]));
+            const nuevos = [], editados = [];
+            for (const f of bd[t]) {
+                const previo = antes.get(f.id);
+                if (previo === undefined) nuevos.push(f);
+                else {
+                    if (previo !== JSON.stringify(f)) editados.push(f);
+                    antes.delete(f.id);
+                }
+            }
+            const borrados = [...antes.keys()];
+            if (nuevos.length || editados.length || borrados.length) cambios[t] = { nuevos, editados, borrados };
+        }
+        return Object.keys(cambios).length ? cambios : null;
+    }
+
+    const modoServidor = conectar();
+    if (!modoServidor) bd = cargar();
 
     function guardar() {
         cacheGeometria.clear();
-        escribir(bd);
+        if (!modoServidor) { escribir(bd); return; }
+        const cambios = diferencias();
+        if (!cambios) return;
+        try {
+            aplicarRespuesta(pedir('guardar.php', { cambios }));
+        } catch (e) {
+            bd = JSON.parse(JSON.stringify(copiaServidor));
+            if (e.codigo === 401) localStorage.removeItem(CLAVE_SESION);
+            throw e;
+        }
     }
 
-    window.addEventListener('storage', (e) => {
-        if (e.key !== CLAVE_BD || !e.newValue) return;
-        try { bd = JSON.parse(e.newValue); cacheGeometria.clear(); } catch (err) { /* se conserva la copia actual */ }
-    });
+    /** Envuelve una operación que guarda: si el servidor la rechaza, devuelve el resultado de error en lugar de lanzar. */
+    const seguro = (fn, alFallar) => (...args) => {
+        try { return fn(...args); } catch (e) { if (e.servidor) return alFallar(e.message); throw e; }
+    };
+    const conErrores = (fn) => seguro(fn, (mensaje) => ({ errores: [mensaje] }));
+    const conFalso = (fn) => seguro(fn, () => false);
+
+    if (!modoServidor) {
+        window.addEventListener('storage', (e) => {
+            if (e.key !== CLAVE_BD || !e.newValue) return;
+            try { bd = JSON.parse(e.newValue); cacheGeometria.clear(); } catch (err) { /* se conserva la copia actual */ }
+        });
+    }
 
     function reiniciarDemo() {
+        if (modoServidor) return;
         bd = sembrar();
         guardar();
     }
@@ -216,6 +313,24 @@ const MRServicios = (() => {
 
     const esRutaPublica = (r) => r.activa && !!lineaDe(r.linea_id)?.activa;
 
+    const TIPOS_FALLA = {
+        llanta: { texto: 'Llanta ponchada o dañada', icono: 'tire_repair' },
+        clima: { texto: 'Aire acondicionado / clima', icono: 'ac_unit' },
+        frenos: { texto: 'Frenos', icono: 'report' },
+        motor: { texto: 'Motor o transmisión', icono: 'car_repair' },
+        electrico: { texto: 'Luces o sistema eléctrico', icono: 'lightbulb' },
+        puertas: { texto: 'Puertas o ventanas', icono: 'door_front' },
+        rampa: { texto: 'Rampa o equipo de accesibilidad', icono: 'accessible' },
+        gps: { texto: 'GPS o dispositivo de ubicación', icono: 'location_disabled' },
+        interior: { texto: 'Asientos, carrocería o interior', icono: 'airline_seat_recline_normal' },
+        otro: { texto: 'Otra falla', icono: 'build' },
+    };
+    const ESTADOS_FALLA = { pendiente: 'Pendiente', en_reparacion: 'En reparación', resuelta: 'Resuelta' };
+
+    const fallasAbiertas = (vehiculoId) => bd.fallas.filter((f) => f.vehiculo_id === vehiculoId && f.estado !== 'resuelta');
+    const fueraDeServicio = (vehiculoId) => fallasAbiertas(vehiculoId).some((f) => f.impide_circular);
+    const conFalla = (vehiculoId, tipo) => fallasAbiertas(vehiculoId).some((f) => f.tipo === tipo);
+
     function ordenRutas(a, b) {
         const na = /^\d+$/.test(a.codigo), nb = /^\d+$/.test(b.codigo);
         if (na !== nb) return na ? -1 : 1;
@@ -332,7 +447,8 @@ const MRServicios = (() => {
             ruta_codigo: r.codigo, ruta_nombre: r.nombre, ruta_sentido: r.sentido, ruta_color: r.color, ruta_destino: r.destino,
             velocidad_promedio_kmh: r.velocidad_promedio_kmh,
             numero_unidad: veh.numero_unidad, placa: veh.placa, cuenta_con_gps: veh.cuenta_con_gps, linea_id: veh.linea_id,
-            climatizado: veh.climatizado, tv_a_bordo: veh.tv_a_bordo, accesible: veh.accesible, vehiculo_activo: veh.activo,
+            climatizado: veh.climatizado && !conFalla(veh.id, 'clima'), tv_a_bordo: veh.tv_a_bordo,
+            accesible: veh.accesible && !conFalla(veh.id, 'rampa'), vehiculo_activo: veh.activo,
             chofer_nombre: usuarioDe(c.usuario_id)?.nombre || '', linea_nombre: lineaDe(r.linea_id)?.nombre || '',
         };
     }
@@ -773,6 +889,15 @@ const MRServicios = (() => {
     const BLOQUEO_SEG = 60;
 
     function iniciarSesion(email, password) {
+        if (modoServidor) {
+            try {
+                aplicarRespuesta(pedir('sesion.php', { accion: 'entrar', email: norm(email), password }));
+                return null;
+            } catch (e) {
+                if (e.servidor) return e.message;
+                throw e;
+            }
+        }
         const control = JSON.parse(sessionStorage.getItem('moviruta.login') || '{"intentos":0,"hasta":0}');
         if (control.hasta > Date.now()) return `Demasiados intentos. Espera ${Math.ceil((control.hasta - Date.now()) / 1000)} segundos e intenta nuevamente.`;
         const u = bd.usuarios.find((x) => x.email === norm(email));
@@ -790,7 +915,12 @@ const MRServicios = (() => {
         return null;
     }
 
-    function cerrarSesion() { localStorage.removeItem(CLAVE_SESION); }
+    function cerrarSesion() {
+        if (modoServidor) {
+            try { aplicarRespuesta(pedir('sesion.php', { accion: 'salir' })); } catch (e) { /* la sesión local se cierra igual */ }
+        }
+        localStorage.removeItem(CLAVE_SESION);
+    }
 
     /** null = administrador (todas las líneas); arreglo de ids = líneas del dueño. */
     function alcance(usuario) {
@@ -826,6 +956,7 @@ const MRServicios = (() => {
     function borrarHistorial(usuarioId) {
         bd.historial = bd.historial.filter((h) => h.usuario_id !== usuarioId);
         guardar();
+        return true;
     }
 
     /* ---------------- Gestión (dueño de línea y administrador) ---------------- */
@@ -958,7 +1089,10 @@ const MRServicios = (() => {
             .filter((v) => ids === null || ids.includes(v.linea_id))
             .map((v) => {
                 const viaje = bd.viajes.find((x) => x.vehiculo_id === v.id && x.estado === 'en_curso');
-                return { ...v, linea: lineaDe(v.linea_id)?.nombre || '', ruta_en_curso: viaje ? rutaDe(viaje.ruta_id)?.codigo ?? null : null };
+                return {
+                    ...v, linea: lineaDe(v.linea_id)?.nombre || '', ruta_en_curso: viaje ? rutaDe(viaje.ruta_id)?.codigo ?? null : null,
+                    fallas_abiertas: fallasAbiertas(v.id).length, fuera_de_servicio: fueraDeServicio(v.id),
+                };
             })
             .sort((a, b) => a.linea.localeCompare(b.linea, 'es') || a.numero_unidad.localeCompare(b.numero_unidad, 'es', { numeric: true }));
     }
@@ -1078,6 +1212,58 @@ const MRServicios = (() => {
         return true;
     }
 
+    /* ---------------- Fallas de vehículos ---------------- */
+
+    function fallas(ids, vehiculoId = null) {
+        return bd.fallas
+            .map((f) => {
+                const v = vehiculoDe(f.vehiculo_id);
+                return v ? {
+                    ...f, numero_unidad: v.numero_unidad, placa: v.placa, linea_id: v.linea_id, linea: lineaDe(v.linea_id)?.nombre || '',
+                    reportante: usuarioDe(f.reportado_por)?.nombre || null, atendio: usuarioDe(f.atendido_por)?.nombre || null,
+                } : null;
+            })
+            .filter((f) => f && f.creado_en && (ids === null || ids.includes(f.linea_id)) && (!vehiculoId || f.vehiculo_id === vehiculoId))
+            .sort((a, b) => (a.estado === 'resuelta') - (b.estado === 'resuelta') || b.impide_circular - a.impide_circular || b.creado_en - a.creado_en);
+    }
+
+    const contarFallasAbiertas = (ids = null) => fallas(ids).filter((f) => f.estado !== 'resuelta').length;
+
+    function reportarFalla(usuario, d, ids) {
+        const vehiculoId = numero(d.vehiculo_id);
+        const vehiculo = vehiculoId ? vehiculoDe(vehiculoId) : null;
+        const datos = { tipo: String(d.tipo || ''), descripcion: limpiar(d.descripcion, 500), impide_circular: !!d.impide_circular };
+        const errores = [];
+        if (!vehiculo || !dentro(vehiculo.linea_id, ids)) errores.push('Selecciona una unidad de tu línea.');
+        if (!TIPOS_FALLA[datos.tipo]) errores.push('Selecciona qué tipo de falla tiene la unidad.');
+        else if (datos.tipo === 'otro' && datos.descripcion.length < 5) errores.push('Describe brevemente la falla.');
+        else if (vehiculo && conFalla(vehiculoId, datos.tipo)) errores.push('Esa falla ya está reportada para esta unidad y sigue sin resolverse.');
+        if (errores.length) return { errores };
+        const viaje = bd.viajes.find((v) => v.vehiculo_id === vehiculoId && v.estado === 'en_curso');
+        bd.fallas.push({
+            id: siguienteId(bd.fallas), vehiculo_id: vehiculoId, ...datos, descripcion: datos.descripcion || null, estado: 'pendiente',
+            reportado_por: usuario.id, viaje_id: viaje?.id ?? null, creado_en: Date.now(), atendido_por: null, nota_solucion: null, resuelto_en: null,
+        });
+        guardar();
+        return { errores: [] };
+    }
+
+    const SIGUIENTE_ESTADO_FALLA = { pendiente: ['en_reparacion', 'resuelta'], en_reparacion: ['resuelta'] };
+
+    function atenderFalla(id, usuario, ids, estado, nota) {
+        const f = bd.fallas.find((x) => x.id === id);
+        const v = f && vehiculoDe(f.vehiculo_id);
+        if (!f || !v || !dentro(v.linea_id, ids) || !(SIGUIENTE_ESTADO_FALLA[f.estado] || []).includes(estado)) {
+            return { errores: ['Esa falla ya no se puede modificar.'] };
+        }
+        Object.assign(f, {
+            estado, atendido_por: usuario.id, nota_solucion: limpiar(nota, 255) || f.nota_solucion,
+            resuelto_en: estado === 'resuelta' ? Date.now() : null,
+        });
+        guardar();
+        return { errores: [] };
+    }
+
     /* ---------------- Chofer ---------------- */
 
     function viajeEnCursoDeChofer(choferId) {
@@ -1095,7 +1281,8 @@ const MRServicios = (() => {
     }
 
     const vehiculosDisponibles = (lineaId) => bd.vehiculos
-        .filter((v) => v.linea_id === lineaId && v.activo && !vehiculoOcupado(v.id))
+        .filter((v) => v.linea_id === lineaId && v.activo && !vehiculoOcupado(v.id) && !fueraDeServicio(v.id))
+        .map((v) => ({ ...v, fallas: fallasAbiertas(v.id) }))
         .sort((a, b) => a.numero_unidad.localeCompare(b.numero_unidad, 'es', { numeric: true }));
 
     function iniciarViaje(chofer, d) {
@@ -1108,6 +1295,7 @@ const MRServicios = (() => {
         if (!ruta || ruta.linea_id !== chofer.linea_id || !ruta.activa) errores.push('Selecciona una ruta activa de tu línea.');
         if (!vehiculo || vehiculo.linea_id !== chofer.linea_id || !vehiculo.activo) errores.push('Selecciona un vehículo activo de tu línea.');
         else if (vehiculoOcupado(vehiculoId)) errores.push('Ese vehículo ya está en un viaje en curso. Elige otro.');
+        else if (fueraDeServicio(vehiculoId)) errores.push('Esa unidad tiene una falla que le impide circular. Elige otra.');
         const max = vehiculo?.capacidad || 300;
         if (pasajeros === null || !Number.isInteger(pasajeros) || pasajeros < 0 || pasajeros > max) errores.push(`Escribe cuántos pasajeros llevas al salir (de 0 a ${max}).`);
         if (errores.length) return { errores };
@@ -1138,17 +1326,21 @@ const MRServicios = (() => {
 
     return {
         ROLES, PANELES,
-        api, reiniciarDemo,
+        api, reiniciarDemo, modoServidor, avisoServidor,
         texto: { norm, textoSentido, estadoInfo, formatoTarifa, formatoDistancia, formatoMinutosAprox, formatoFecha, formatoHora, hora24, formatoDuracion, fechaISO },
         consulta: { rutasPublicas, rutaPublica, paradasPublicas, paradaPublica, rutasDeParada, porParadas, frecuentes, conAvisos, detalleRuta, lineasTotalmenteAccesibles, telefonosLineas },
         sesion: { usuarioActual, iniciarSesion, cerrarSesion, alcance },
-        historial: { registrar: registrarConsulta, listar: historial, borrar: borrarHistorial },
+        historial: { registrar: seguro(registrarConsulta, () => {}), listar: historial, borrar: conFalso(borrarHistorial) },
         gestion: {
-            lineas, guardarLinea, usuarios, guardarUsuario, ROLES_ASIGNABLES,
-            choferes, choferPorId, guardarChofer, vehiculos, vehiculoPorId, guardarVehiculo, vehiculoOcupado,
-            rutasGestion, rutaPorId, paradasDeRuta, guardarRuta, paradasTodas, paradaDe, guardarParada,
-            reportes, marcarRevisado, contarPorRol, contarEnCurso, contarParadasActivas,
+            lineas, guardarLinea: conErrores(guardarLinea), usuarios, guardarUsuario: conErrores(guardarUsuario), ROLES_ASIGNABLES,
+            choferes, choferPorId, guardarChofer: conErrores(guardarChofer), vehiculos, vehiculoPorId, guardarVehiculo: conErrores(guardarVehiculo), vehiculoOcupado,
+            rutasGestion, rutaPorId, paradasDeRuta, guardarRuta: conErrores(guardarRuta), paradasTodas, paradaDe, guardarParada: conErrores(guardarParada),
+            reportes, marcarRevisado: conFalso(marcarRevisado), contarPorRol, contarEnCurso, contarParadasActivas,
         },
-        chofer: { deUsuario: choferDeUsuario, viajeEnCurso: viajeEnCursoDeChofer, historial: historialChofer, vehiculosDisponibles, iniciarViaje, finalizarViaje },
+        fallas: {
+            TIPOS: TIPOS_FALLA, ESTADOS: ESTADOS_FALLA, listar: fallas, contarAbiertas: contarFallasAbiertas,
+            reportar: conErrores(reportarFalla), atender: conErrores(atenderFalla), fueraDeServicio,
+        },
+        chofer: { deUsuario: choferDeUsuario, viajeEnCurso: viajeEnCursoDeChofer, historial: historialChofer, vehiculosDisponibles, iniciarViaje: conErrores(iniciarViaje), finalizarViaje: conFalso(finalizarViaje) },
     };
 })();

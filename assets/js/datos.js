@@ -6,7 +6,7 @@
  * Los tiempos de viajes, reportes e historial son minutos relativos al momento en que se cargan por primera vez.
  */
 window.MR_DATOS_DEMO = {
-    version: 1,
+    version: 2,
     usuarios: [
         {"id":1,"rol":"admin","nombre":"Administrador General","email":"admin@moviruta.local","password":"moviruta123","activo":true,"ultimo_acceso":null},
         {"id":2,"rol":"dueno","nombre":"Laura Méndez","email":"dueno.centro@moviruta.local","password":"moviruta123","activo":true,"ultimo_acceso":null},
@@ -123,6 +123,11 @@ window.MR_DATOS_DEMO = {
     reportes: [
         { id: 1, ruta_id: 4, usuario_id: 9, descripcion: 'Choque leve entre dos autos sobre Av. Gregorio Méndez, el carril derecho está cerrado (reporte de demostración).', contacto: null, latitud: null, longitud: null, estado: 'nuevo', hace_min: 40, revisado_por: null, revisado_hace_min: null },
         { id: 2, ruta_id: 6, usuario_id: null, descripcion: 'Camión descompuesto en la carretera a la altura de Cupilco (reporte de demostración).', contacto: '933 555 0000', latitud: null, longitud: null, estado: 'revisado', hace_min: 1440, revisado_por: 11, revisado_hace_min: 1380 },
+    ],
+    fallas: [
+        { id: 1, vehiculo_id: 6, tipo: 'llanta', descripcion: 'Llanta trasera derecha ponchada al salir de la base (demostración).', impide_circular: true, estado: 'pendiente', reportado_por: 7, viaje_id: null, hace_min: 90, atendido_por: null, nota_solucion: null, resuelto_hace_min: null },
+        { id: 2, vehiculo_id: 2, tipo: 'clima', descripcion: 'El aire acondicionado no enfría en la parte de atrás (demostración).', impide_circular: false, estado: 'en_reparacion', reportado_por: 4, viaje_id: 10, hace_min: 1480, atendido_por: 2, nota_solucion: null, resuelto_hace_min: null },
+        { id: 3, vehiculo_id: 8, tipo: 'puertas', descripcion: 'La puerta corrediza se atora al cerrar (demostración).', impide_circular: false, estado: 'resuelta', reportado_por: 12, viaje_id: 17, hace_min: 1700, atendido_por: 11, nota_solucion: 'Se ajustó y lubricó el riel de la puerta.', resuelto_hace_min: 1600 },
     ],
     historial: [
         { id: 1, usuario_id: 9, ruta_id: 1, parada_id: null, hace_min: 2880 },

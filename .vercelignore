@@ -1,0 +1,4 @@
+database/
+api/config.local.php
+*.md
+.htaccess

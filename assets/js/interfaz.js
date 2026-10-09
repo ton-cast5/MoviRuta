@@ -30,12 +30,14 @@ const MRUI = (() => {
             ['inicio', 'Mi perfil', 'chofer/index.html', 'badge'],
             ['iniciar', 'Iniciar viaje', 'chofer/iniciar.html', 'play_circle'],
             ['viaje', 'Viaje actual', 'chofer/viaje.html', 'directions_bus'],
+            ['fallas', 'Fallas de unidad', 'chofer/fallas.html', 'car_repair'],
             ['historial', 'Historial de viajes', 'chofer/historial.html', 'history'],
         ],
         dueno: [
             ['inicio', 'Resumen', 'dueno/index.html', 'dashboard'],
             ['choferes', 'Choferes', 'dueno/choferes.html', 'id_card'],
             ['vehiculos', 'Vehículos', 'dueno/vehiculos.html', 'directions_bus'],
+            ['fallas', 'Fallas de vehículos', 'dueno/fallas.html', 'car_repair'],
             ['rutas', 'Rutas', 'dueno/rutas.html', 'route'],
             ['paradas', 'Paradas', 'dueno/paradas.html', 'location_on'],
             ['ubicacion', 'Ubicación de vehículos', 'dueno/ubicacion.html', 'sensors'],
@@ -47,6 +49,7 @@ const MRUI = (() => {
             ['usuarios', 'Usuarios', 'admin/usuarios.html', 'group'],
             ['choferes', 'Choferes', 'admin/choferes.html', 'id_card'],
             ['vehiculos', 'Vehículos', 'admin/vehiculos.html', 'directions_bus'],
+            ['fallas', 'Fallas de vehículos', 'admin/fallas.html', 'car_repair'],
             ['rutas', 'Rutas', 'admin/rutas.html', 'route'],
             ['paradas', 'Paradas', 'admin/paradas.html', 'location_on'],
             ['ubicacion', 'Ubicación de vehículos', 'admin/ubicacion.html', 'sensors'],
@@ -482,12 +485,14 @@ const MRUI = (() => {
                     <p>&copy; ${new Date().getFullYear()} MoviRuta. Todos los derechos reservados.</p>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                         <span>Datos del mapa &copy; Google · Mapas con <a href="https://leafletjs.com" target="_blank" rel="noopener" class="underline hover:text-white">Leaflet</a></span>
-                        <button type="button" data-reiniciar-demo class="inline-flex items-center gap-1 hover:text-secondary-container">${icono('restart_alt', 'text-[15px]')} Restablecer datos de demostración</button>
+                        ${S.modoServidor
+                            ? `<span class="inline-flex items-center gap-1">${icono('database', 'text-[15px]')} Conectado a la base de datos MoviRuta</span>`
+                            : `<button type="button" data-reiniciar-demo class="inline-flex items-center gap-1 hover:text-secondary-container">${icono('restart_alt', 'text-[15px]')} Restablecer datos de demostración</button>`}
                     </div>
                 </div>
             </div>`;
         destino.replaceWith(pieEl);
-        pieEl.querySelector('[data-reiniciar-demo]').addEventListener('click', async () => {
+        pieEl.querySelector('[data-reiniciar-demo]')?.addEventListener('click', async () => {
             const si = await confirmar({
                 titulo: '¿Restablecer los datos de demostración?',
                 mensaje: 'Se borrarán los cambios hechos en los paneles (líneas, rutas, viajes, reportes…) y se cerrará la sesión.',
@@ -634,6 +639,7 @@ const MRUI = (() => {
         panel();
         pie();
         mostrarAvisoPendiente();
+        if (S.avisoServidor) aviso(S.avisoServidor, 'advertencia');
         document.addEventListener('DOMContentLoaded', () => {
             revelar();
             contarVisibles();

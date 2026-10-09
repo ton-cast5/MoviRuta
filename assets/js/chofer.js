@@ -90,7 +90,7 @@
         const vehiculos = S.chofer.vehiculosDisponibles(chofer.linea_id);
         if (!rutas.length || !vehiculos.length) {
             P.vista.innerHTML = `<div class="mr-tarjeta mr-anim-escala">${MR.htmlVacio('error',
-                `${!rutas.length ? 'Tu línea no tiene rutas activas.' : 'No hay vehículos disponibles en este momento: todos están en circulación o inactivos.'} Comunícate con el dueño de tu línea.`)}</div>`;
+                `${!rutas.length ? 'Tu línea no tiene rutas activas.' : 'No hay vehículos disponibles en este momento: todos están en circulación, inactivos o fuera de servicio por alguna falla.'} Comunícate con el dueño de tu línea.`)}</div>`;
             return;
         }
         const opcion = (nombre, valor, contenido, i) => `
@@ -103,6 +103,7 @@
             v.cuenta_con_gps ? icono('sensors', 'text-[16px] text-secondary') : icono('location_disabled', 'text-[16px] text-outline'),
             v.climatizado ? icono('ac_unit', 'text-[16px]') : '', v.tv_a_bordo ? icono('tv', 'text-[16px]') : '', v.accesible ? icono('accessible', 'text-[16px]') : '',
         ].join('');
+        const avisoFallas = (v) => (v.fallas.length ? `<span class="mt-1 flex items-center gap-1 text-xs font-semibold text-[color:var(--aviso)]">${icono('warning', 'text-[15px]')} ${esc(v.fallas.map((f) => S.fallas.TIPOS[f.tipo]?.texto || 'Falla').join(', '))}</span>` : '');
         P.vista.innerHTML = `
             <form id="formViaje" class="flex max-w-3xl flex-col gap-6" novalidate>
                 <section class="mr-tarjeta p-5">
@@ -115,10 +116,10 @@
                 </section>
                 <section class="mr-tarjeta p-5">
                     <h2 class="mb-1 flex items-center gap-2 font-headline-sm text-headline-sm">${icono('directions_bus', 'text-secondary')} 2. Vehículo</h2>
-                    <p class="mb-4 text-sm text-on-surface-variant">Solo aparecen las unidades activas que no están en circulación.</p>
+                    <p class="mb-4 text-sm text-on-surface-variant">Solo aparecen las unidades activas que no están en circulación ni fuera de servicio por alguna falla.</p>
                     <div class="grid gap-3 sm:grid-cols-2">${vehiculos.map((v, i) => opcion('vehiculo_id', v.id, `
                         <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-white">${icono('directions_bus')}</span>
-                        <span class="min-w-0"><span class="block font-semibold">Unidad ${esc(v.numero_unidad)}</span><span class="flex items-center gap-1 text-xs text-on-surface-variant">${esc(v.placa)}${v.capacidad ? ` · ${v.capacidad} lugares` : ''} <span class="ml-1 flex gap-0.5 text-primary">${equipo(v)}</span></span></span>`, i)).join('')}
+                        <span class="min-w-0"><span class="block font-semibold">Unidad ${esc(v.numero_unidad)}</span><span class="flex items-center gap-1 text-xs text-on-surface-variant">${esc(v.placa)}${v.capacidad ? ` · ${v.capacidad} lugares` : ''} <span class="ml-1 flex gap-0.5 text-primary">${equipo(v)}</span></span>${avisoFallas(v)}</span>`, i)).join('')}
                     </div>
                 </section>
                 <section class="mr-tarjeta p-5">
@@ -187,7 +188,10 @@
             </div>
             <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <div class="mr-actualizacion" id="indicador"></div>
-                <button class="mr-btn mr-btn-peligro-solido" type="button" id="btnFinalizar">${icono('stop_circle')} Finalizar viaje</button>
+                <div class="flex flex-wrap gap-2">
+                    <a class="mr-btn mr-btn-contorno" href="${P.enlace('fallas', `vehiculo=${viaje.vehiculo_id}`)}">${icono('car_repair')} Reportar falla</a>
+                    <button class="mr-btn mr-btn-peligro-solido" type="button" id="btnFinalizar">${icono('stop_circle')} Finalizar viaje</button>
+                </div>
             </div>`;
 
         const mapa = MR.crearMapa('mapa');
@@ -216,6 +220,59 @@
             if (!ok) return;
             if (S.chofer.finalizarViaje(viaje.id, chofer.id)) MRUI.ir('chofer/historial.html', 'Viaje finalizado y registrado en tu historial.');
             else MRUI.ir('chofer/viaje.html', 'No fue posible finalizar el viaje: ya no está en curso.', 'advertencia');
+        });
+    }
+
+    /* ---------- Fallas de las unidades ---------- */
+    if (P.seccion === 'fallas') {
+        const unidades = S.gestion.vehiculos([chofer.linea_id]).filter((v) => v.activo);
+        const enCurso = S.chofer.viajeEnCurso(chofer.id);
+        const pedida = Number(MR.parametro('vehiculo')) || null;
+        const inicial = unidades.some((v) => v.id === pedida) ? pedida : enCurso?.vehiculo_id || '';
+        const lista = S.fallas.listar([chofer.linea_id]);
+        const abiertas = lista.filter((f) => f.estado !== 'resuelta');
+        const resueltas = lista.filter((f) => f.estado === 'resuelta').slice(0, 10);
+        const tipos = Object.entries(S.fallas.TIPOS);
+        P.vista.innerHTML = `
+            <form id="formFalla" class="mr-tarjeta max-w-3xl p-5 mr-anim-subir" novalidate>
+                <h2 class="mb-1 flex items-center gap-2 font-headline-sm text-headline-sm">${icono('car_repair', 'text-secondary')} Reportar una falla</h2>
+                <p class="mb-4 text-sm text-on-surface-variant">El dueño de tu línea verá el reporte para mandar a reparar la unidad.</p>
+                ${P.campo('vehiculo_id', 'Unidad', P.selector('vehiculo_id', unidades.map((v) => [v.id, `Unidad ${v.numero_unidad} · ${v.placa}`]), inicial, 'Selecciona la unidad', 'required'))}
+                <p class="mr-etiqueta-campo mt-4">¿Qué falla tiene?</p>
+                <div class="grid gap-2 sm:grid-cols-2">${tipos.map(([clave, t]) => `
+                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-surface-container bg-surface-container-lowest p-3 transition-all hover:border-secondary/50 has-[:checked]:border-secondary has-[:checked]:bg-secondary-container/20">
+                        <input class="sr-only" type="radio" name="tipo" value="${clave}">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">${icono(t.icono, 'text-[20px]')}</span>
+                        <span class="text-sm font-semibold">${esc(t.texto)}</span>
+                    </label>`).join('')}
+                </div>
+                ${P.campo('descripcion', 'Detalles', '<textarea class="mr-campo" id="descripcion" name="descripcion" rows="3" maxlength="500" placeholder="Ej. La llanta trasera izquierda se ponchó en Av. Universidad."></textarea>', { clase: 'mt-4', opcional: true })}
+                <div class="mt-4">${P.interruptor('impide_circular', 'La unidad no puede circular hasta que la reparen', false)}</div>
+                <p class="mr-ayuda">Si la marcas, nadie podrá iniciar viajes con esa unidad hasta que el dueño la marque como resuelta.</p>
+                <div class="mt-5 flex flex-wrap gap-2 border-t border-surface-container pt-5">
+                    <button class="mr-btn mr-btn-primario" type="submit">${icono('send')} Enviar reporte</button>
+                    ${enCurso ? `<a class="mr-btn mr-btn-contorno" href="${P.enlace('viaje')}">Volver al viaje</a>` : ''}
+                </div>
+            </form>
+            <section class="mt-8 mr-revelar">
+                <h2 class="mb-3 flex items-center gap-2 font-headline-sm text-headline-sm">${icono('build', 'text-secondary')} Fallas abiertas en tu línea</h2>
+                <div class="flex flex-col gap-4">${abiertas.length ? abiertas.map((f, i) => P.tarjetaFalla(f, i)).join('') : `<div class="mr-tarjeta">${MR.htmlVacio('verified', 'Ninguna unidad de tu línea tiene fallas pendientes.')}</div>`}</div>
+            </section>
+            ${resueltas.length ? `
+                <section class="mt-8 mr-revelar">
+                    <h2 class="mb-3 flex items-center gap-2 font-headline-sm text-headline-sm">${icono('task_alt', 'text-secondary')} Resueltas recientemente</h2>
+                    <div class="flex flex-col gap-4">${resueltas.map((f, i) => P.tarjetaFalla(f, i)).join('')}</div>
+                </section>` : ''}`;
+        const form = document.getElementById('formFalla');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const datos = { ...P.leer(form), tipo: form.querySelector('[name=tipo]:checked')?.value || '' };
+            const { errores } = S.fallas.reportar(u, datos, [chofer.linea_id]);
+            if (errores.length) { P.errores(form, errores); return; }
+            const propia = enCurso && Number(datos.vehiculo_id) === enCurso.vehiculo_id;
+            MRUI.ir('chofer/fallas.html', datos.impide_circular && propia
+                ? 'Falla reportada. Finaliza tu viaje en cuanto sea seguro: la unidad quedó fuera de servicio.'
+                : 'Falla reportada. El dueño de tu línea ya puede verla.', datos.impide_circular && propia ? 'advertencia' : 'exito');
         });
     }
 

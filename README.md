@@ -2,22 +2,61 @@
 
 **Movilidad + Ruta.** Sistema web de consulta y seguimiento del transporte público: rutas, paradas, vehículos, ubicación y tiempo estimado de llegada (ETA), con cuatro perfiles: pasajero, chofer, dueño de línea y administrador general.
 
-Stack: HTML5 · Tailwind CSS (CDN) · JavaScript sin frameworks · Leaflet.js con mosaicos de Google Maps · API en PHP 8 · base de datos MySQL **MoviRuta**.
+Stack: HTML5 · Tailwind CSS (CDN) · JavaScript sin frameworks · Leaflet.js con mosaicos de Google Maps · API en PHP 8 · base de datos **Supabase** (PostgreSQL) con respaldo en **MySQL** (Workbench).
 
 El sitio funciona de dos formas:
 
-- **Con base de datos** (WAMP en tu computadora, o Vercel con un MySQL en la nube): todo lo que se guarda en los paneles va a MySQL y el servidor valida la sesión y los permisos.
+- **Con base de datos** (Vercel, o WAMP en tu computadora): todo lo que se guarda en los paneles va a la base y el servidor valida la sesión y los permisos.
 - **Sin servidor** (doble clic en `index.html`, GitHub Pages): usa los datos de demostración guardados en el navegador. Útil para enseñar el diseño, pero no guarda nada en la base de datos.
 
-La página detecta sola en qué modo está; en el pie dice "Conectado a la base de datos MoviRuta" cuando usa MySQL.
+La página detecta sola en qué modo está; en el pie dice "Conectado a la base de datos MoviRuta" cuando usa la base.
 
 ---
 
-## Cómo abrirlo con la base de datos (WAMP + MySQL Workbench)
+## Base de datos: Supabase (principal) + MySQL Workbench (respaldo)
 
-1. Enciende WAMP (MySQL en el puerto 3306, usuario `root` sin contraseña).
-2. En MySQL Workbench abre y ejecuta completo `database/moviruta.sql` (crea la base **MoviRuta** con sus tablas, llaves foráneas y vistas) y después `database/datos_demo.sql` (datos de demostración). ⚠️ `moviruta.sql` borra la base si ya existía.
-3. El archivo `D:\wamp64\alias\moviruta.conf` publica la carpeta en Apache:
+```text
+Vercel (sitio público) ─┐
+                        ├──► Supabase · proyecto MoviRuta (PostgreSQL) ── base principal: aquí se lee y se escribe
+WAMP (tu computadora) ──┘                     │
+                                              │  database/sincronizar.php, cada minuto (tarea programada de Windows)
+                                              ▼
+                              MySQL de WAMP · base MoviRuta (Workbench) ── respaldo con la misma información
+```
+
+- Las dos bases tienen **las mismas tablas, columnas, llaves foráneas y nombres** (`database/supabase.sql` y `database/moviruta.sql`).
+- La copia a MySQL es completa y en una sola transacción, y solo se hace cuando algo cambió en Supabase. Queda anotada en `database/sincronizacion.log`.
+- La tarea programada **"MoviRuta - respaldo"** ejecuta la copia cada minuto mientras tu computadora esté encendida (y WAMP también). Para copiar en el momento: `php database/sincronizar.php --forzar`.
+- ⚠️ **No edites datos directamente en Workbench**: el MySQL es un espejo y la siguiente copia lo deja igual que Supabase. Los cambios se hacen desde el sitio (o en Supabase).
+- La API se conecta a Supabase con el usuario `moviruta_api`, que solo puede leer y escribir las tablas de MoviRuta. La API pública de Supabase (`anon`) no tiene acceso a ninguna tabla.
+
+### Crear todo desde cero
+
+1. **Supabase**: en el proyecto MoviRuta → *SQL Editor*, ejecuta `database/supabase.sql` y después `database/supabase_datos_demo.sql`. Crea el usuario de la API (cambia la clave):
+   ```sql
+   CREATE ROLE moviruta_api LOGIN NOINHERIT PASSWORD 'una-clave-larga';
+   GRANT USAGE ON SCHEMA public TO moviruta_api;
+   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO moviruta_api;
+   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO moviruta_api;
+   -- y en cada tabla: CREATE POLICY api_moviruta ON <tabla> FOR ALL TO moviruta_api USING (true) WITH CHECK (true);
+   ```
+2. **MySQL (Workbench)**: ejecuta `database/moviruta.sql` (crea la base **MoviRuta**; ⚠️ la borra si ya existía). Los datos llegan solos con la sincronización.
+3. **`api/config.local.php`** (no se sube a git) con la conexión a Supabase:
+   ```php
+   <?php return ['motor' => 'pgsql', 'host' => 'aws-0-us-east-1.pooler.supabase.com', 'puerto' => 6543,
+                 'base' => 'postgres', 'usuario' => 'moviruta_api.cnklvwiidyquhrqsgxvf', 'password' => 'una-clave-larga'];
+   ```
+   Sin este archivo la API usa directamente el MySQL local (sirve si no tienes internet, pero esos cambios no llegan a Supabase y la siguiente sincronización los reemplaza).
+4. **Tarea programada** (una sola vez):
+   ```powershell
+   schtasks /Create /F /SC MINUTE /MO 1 /TN "MoviRuta - respaldo" /TR '"D:\wamp64\bin\php\php8.3.28\php-win.exe" "D:\MoviRuta\database\sincronizar.php"'
+   ```
+5. En `php.ini` y `phpForApache.ini` de WAMP deben estar activas `extension=pdo_pgsql` y `extension=pgsql`.
+
+## Cómo abrirlo en tu computadora (WAMP)
+
+1. Enciende WAMP (Apache y MySQL).
+2. El archivo `D:\wamp64\alias\moviruta.conf` publica la carpeta en Apache:
    ```apache
    Alias /MoviRuta "D:/MoviRuta/"
    <Directory "D:/MoviRuta/">
@@ -27,35 +66,30 @@ La página detecta sola en qué modo está; en el pie dice "Conectado a la base 
    </Directory>
    ```
    Reinicia los servicios de WAMP y abre `http://localhost/MoviRuta/`.
-4. Si tu MySQL usa otra contraseña o puerto, crea `api/config.local.php` (no se sube a git): `<?php return ['password' => 'mi-clave', 'puerto' => 3307];`
 
-Sin Apache también sirve el servidor de PHP: `php -S 127.0.0.1:8090` dentro de la carpeta y abrir `http://127.0.0.1:8090/`.
+Sin Apache también sirve el servidor de PHP: `php -S 127.0.0.1:8090` dentro de la carpeta y abrir `http://127.0.0.1:8090/`. Desde tu computadora cada página tarda 1–2 segundos porque los datos vienen de Supabase (en Estados Unidos); en Vercel la API está junto a Supabase y responde mucho más rápido.
 
-### Base de datos
+### Tablas
 
 - Catálogos: `rol`, `sentido_ruta`, `estado_servicio`, `estado_viaje`, `estado_reporte`, `tipo_falla`, `estado_falla`.
-- Tablas: `usuario`, `linea_transporte`, `chofer`, `vehiculo`, `parada`, `ruta`, `ruta_parada` (paradas en orden), `recorrido_punto` (trazado), `viaje`, `reporte_accidente`, `falla_vehiculo`, `historial_consulta` y `sesion` (sesiones de la API).
-- Vistas para consultar desde Workbench: `vista_rutas`, `vista_viajes_en_curso`, `vista_fallas_abiertas`.
+- Tablas: `usuario`, `linea_transporte`, `chofer`, `vehiculo`, `parada`, `ruta`, `ruta_parada` (paradas en orden), `recorrido_punto` (trazado), `viaje`, `reporte_accidente`, `falla_vehiculo`, `historial_consulta` y `sesion` (sesiones de la API; no se copia al respaldo).
+- Vistas para consultar desde Workbench o Supabase: `vista_rutas`, `vista_viajes_en_curso`, `vista_fallas_abiertas`.
 - Las contraseñas se guardan cifradas con bcrypt.
 
-## Publicar en Vercel con base de datos
+## Publicar en Vercel
 
-Vercel no puede usar el MySQL de tu computadora, así que la base va en un MySQL en la nube; la API en PHP corre en Vercel con `vercel-php` (ya configurado en `vercel.json`).
+La API en PHP corre en Vercel con `vercel-php` (configurado en `vercel.json`) y usa la misma base de Supabase. En **Vercel → proyecto moviruta → Settings → Environment Variables** (Production y Preview):
 
-1. **Crea un MySQL en la nube** gratuito, por ejemplo [TiDB Cloud](https://tidbcloud.com) (compatible con MySQL; elige la región AWS *N. Virginia / us-east-1*, cerca de los servidores de Vercel) o [Aiven for MySQL](https://aiven.io/mysql).
-2. **Conéctalo en MySQL Workbench** con el host, puerto, usuario y contraseña que te da el proveedor (en la pestaña *SSL* pon *Use SSL: Require*) y ejecuta `database/moviruta.sql` y luego `database/datos_demo.sql`.
-3. **En Vercel → tu proyecto → Settings → Environment Variables** agrega:
+| Variable | Valor |
+|---|---|
+| `DB_DRIVER` | `pgsql` |
+| `DB_HOST` | `aws-0-us-east-1.pooler.supabase.com` |
+| `DB_PORT` | `6543` |
+| `DB_NAME` | `postgres` |
+| `DB_USER` | `moviruta_api.cnklvwiidyquhrqsgxvf` |
+| `DB_PASSWORD` | la clave de `moviruta_api` (la misma de `api/config.local.php`) |
 
-   | Variable | Valor |
-   |---|---|
-   | `DB_HOST` | host del proveedor |
-   | `DB_PORT` | puerto (TiDB: 4000) |
-   | `DB_USER` | usuario |
-   | `DB_PASSWORD` | contraseña |
-   | `DB_NAME` | `MoviRuta` |
-   | `DB_SSL_CA` | solo si el proveedor te da su certificado (Aiven): guarda el `ca.pem` en `api/` y pon `ca.pem` |
-
-4. **Vuelve a publicar** (un `git push` o *Deployments → Redeploy*). Para comprobarlo, abre `https://tu-sitio.vercel.app/api/bd.php`: debe responder `{"ok":true,...}`.
+Cada `git push` publica de nuevo. Para comprobarlo, abre `https://moviruta.vercel.app/api/bd.php`: debe responder `{"ok":true,...}`.
 
 Si la base no responde, el sitio sigue funcionando con los datos de demostración y muestra un aviso.
 
@@ -94,7 +128,7 @@ Contraseña de todas: `moviruta123` (en *Iniciar sesión* hay botones para entra
 
 ### Dónde se guardan los datos
 
-**Con base de datos:** al abrir cada página, `api/bd.php` entrega los datos que el usuario puede ver; cada cambio se manda a `api/guardar.php`, que revisa la sesión y los permisos con los datos de MySQL (un chofer solo maneja unidades de su línea, un dueño solo administra sus líneas, etc.) y guarda todo en una transacción. El inicio de sesión (`api/sesion.php`) bloquea un minuto después de 5 intentos fallidos.
+**Con base de datos:** al abrir cada página, `api/bd.php` entrega los datos que el usuario puede ver; cada cambio se manda a `api/guardar.php`, que revisa la sesión y los permisos con los datos de la base (un chofer solo maneja unidades de su línea, un dueño solo administra sus líneas, etc.) y guarda todo en una transacción en Supabase; al minuto queda también en el MySQL de respaldo. El inicio de sesión (`api/sesion.php`) bloquea un minuto después de 5 intentos fallidos.
 
 **Sin servidor:** los datos iniciales de `assets/js/datos.js` se copian a `localStorage` (clave `moviruta.bd`) y lo que se edita se guarda **solo en ese navegador**; el botón *Restablecer datos de demostración* del pie los regresa al inicio. En este modo el inicio de sesión y los permisos son una simulación que no protege nada.
 
@@ -141,7 +175,8 @@ MoviRuta/
 ├── manifest.webmanifest                                                     App web instalable (nombre, colores e íconos)
 ├── pasajero/  chofer/  dueno/  admin/                                       Panel de cada perfil
 ├── api/                                                                     API en PHP (bd.php, sesion.php, guardar.php, config.php)
-├── database/                                                                moviruta.sql (esquema) y datos_demo.sql
+├── database/                                                                Esquemas y datos de Supabase (supabase*.sql) y MySQL (moviruta.sql,
+│                                                                            datos_demo.sql), y sincronizar.php (Supabase → MySQL)
 ├── vercel.json, .vercelignore                                               Publicación en Vercel
 └── assets/
     ├── css/moviruta.css        Estilos propios y animaciones (sobre Tailwind)

@@ -2,7 +2,7 @@
 /**
  * POST {cambios: {tabla: {nuevos: [...], editados: [...], borrados: [ids]}}}
  * Las tablas usan los nombres de assets/js/servicios.js. Cada fila se valida contra el perfil del usuario con sesión
- * (los permisos se revisan con los datos de MySQL, no con lo que manda el navegador) y todo se guarda en una transacción.
+ * (los permisos se revisan con los datos de la base, no con lo que manda el navegador) y todo se guarda en una transacción.
  * Responde con los datos actualizados.
  */
 require __DIR__ . '/_base.php';
@@ -131,12 +131,6 @@ final class Guardado
         return $n === null || abs($n) > $limite ? null : round($n, 6);
     }
 
-    private static function insertar(string $sql, array $parametros): int
-    {
-        ejecutar($sql, $parametros);
-        return (int) db()->lastInsertId();
-    }
-
     /* ---------------- Usuarios ---------------- */
 
     private function datosUsuario(array $f): array
@@ -164,7 +158,7 @@ final class Guardado
     {
         [$nombre, $email, $rol, $activo] = $this->datosUsuario($f);
         $this->permitir($this->esAdmin() ? in_array($rol, ['pasajero', 'chofer', 'dueno', 'admin'], true) : ($this->rol() === 'dueno' && $rol === 'chofer'));
-        return self::insertar(
+        return insertar(
             'INSERT INTO usuario (rol, nombre, email, password_hash, activo) VALUES (?, ?, ?, ?, ?)',
             [$rol, $nombre, $email, self::hashPassword($f['password'] ?? '', true), $activo]
         );
@@ -208,7 +202,7 @@ final class Guardado
     private function nuevoLineas(array $f): int
     {
         $this->permitir($this->esAdmin());
-        return self::insertar('INSERT INTO linea_transporte (nombre, descripcion, telefono, dueno_id, activa) VALUES (?, ?, ?, ?, ?)', $this->datosLinea($f));
+        return insertar('INSERT INTO linea_transporte (nombre, descripcion, telefono, dueno_id, activa) VALUES (?, ?, ?, ?, ?)', $this->datosLinea($f));
     }
 
     private function editarLineas(int $id, array $f): void
@@ -237,7 +231,7 @@ final class Guardado
     {
         $this->permitir($this->esAdmin() || $this->rol() === 'dueno');
         $activa = $this->esAdmin() ? ($f['activa'] ?? true) : true;
-        return self::insertar('INSERT INTO parada (codigo, nombre, referencia, latitud, longitud, activa) VALUES (?, ?, ?, ?, ?, ?)', $this->datosParada($f, (bool) $activa));
+        return insertar('INSERT INTO parada (codigo, nombre, referencia, latitud, longitud, activa) VALUES (?, ?, ?, ?, ?, ?)', $this->datosParada($f, (bool) $activa));
     }
 
     private function editarParadas(int $id, array $f): void
@@ -265,7 +259,7 @@ final class Guardado
         if (!$usuarioId || !fila("SELECT id FROM usuario WHERE id = ? AND rol = 'chofer'", [$usuarioId])) {
             throw new ErrorApi('La cuenta del chofer no es válida.');
         }
-        return self::insertar('INSERT INTO chofer (linea_id, numero_licencia, telefono, activo, usuario_id) VALUES (?, ?, ?, ?, ?)', [...$datos, $usuarioId]);
+        return insertar('INSERT INTO chofer (linea_id, numero_licencia, telefono, activo, usuario_id) VALUES (?, ?, ?, ?, ?)', [...$datos, $usuarioId]);
     }
 
     private function editarChoferes(int $id, array $f): void
@@ -299,7 +293,7 @@ final class Guardado
 
     private function nuevoVehiculos(array $f): int
     {
-        return self::insertar(
+        return insertar(
             'INSERT INTO vehiculo (linea_id, numero_unidad, placa, modelo, capacidad, cuenta_con_gps, climatizado, tv_a_bordo, accesible, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             $this->datosVehiculo($f)
         );
@@ -381,7 +375,7 @@ final class Guardado
 
     private function nuevoRutas(array $f): int
     {
-        $id = self::insertar(
+        $id = insertar(
             'INSERT INTO ruta (linea_id, codigo, nombre, origen, destino, sentido, color, tarifa, velocidad_promedio_kmh, estado_servicio, aviso, activa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             $this->datosRuta($f)
         );
@@ -439,7 +433,7 @@ final class Guardado
         if (!is_int($pasajeros) || $pasajeros < 0 || $pasajeros > $max) {
             throw new ErrorApi("Escribe cuántos pasajeros llevas al salir (de 0 a {$max}).");
         }
-        return self::insertar(
+        return insertar(
             "INSERT INTO viaje (chofer_id, vehiculo_id, ruta_id, inicio, pasajeros_salida, estado) VALUES (?, ?, ?, NOW(), ?, 'en_curso')",
             [$chofer['id'], $vehiculoId, $rutaId, $pasajeros]
         );
@@ -480,7 +474,7 @@ final class Guardado
         $lat = self::coordenada($f['latitud'] ?? null, 90);
         $lng = self::coordenada($f['longitud'] ?? null, 180);
         $conUbicacion = $lat !== null && $lng !== null;
-        $id = self::insertar(
+        $id = insertar(
             "INSERT INTO reporte_accidente (ruta_id, usuario_id, descripcion, contacto, latitud, longitud, estado, creado_en) VALUES (?, ?, ?, ?, ?, ?, 'nuevo', NOW())",
             [$rutaId, $this->u['id'] ?? null, $descripcion, self::textoONulo($f['contacto'] ?? null, 120), $conUbicacion ? $lat : null, $conUbicacion ? $lng : null]
         );
@@ -527,7 +521,7 @@ final class Guardado
             throw new ErrorApi('Esa falla ya está reportada para esta unidad y sigue sin resolverse.');
         }
         $viaje = fila("SELECT id FROM viaje WHERE vehiculo_id = ? AND estado = 'en_curso'", [$vehiculoId]);
-        return self::insertar(
+        return insertar(
             "INSERT INTO falla_vehiculo (vehiculo_id, tipo, descripcion, impide_circular, estado, reportado_por, viaje_id, creado_en) VALUES (?, ?, ?, ?, 'pendiente', ?, ?, NOW())",
             [$vehiculoId, $tipo, $descripcion, self::bool($f['impide_circular'] ?? false), $this->u['id'], $viaje['id'] ?? null]
         );
@@ -545,8 +539,9 @@ final class Guardado
             throw new ErrorApi('Esa falla ya no se puede modificar.');
         }
         ejecutar(
-            "UPDATE falla_vehiculo SET estado = ?, atendido_por = ?, nota_solucion = COALESCE(?, nota_solucion), resuelto_en = IF(? = 'resuelta', NOW(), NULL) WHERE id = ?",
-            [$estado, $this->u['id'], self::textoONulo($f['nota_solucion'] ?? null, 255), $estado, $id]
+            'UPDATE falla_vehiculo SET estado = ?, atendido_por = ?, nota_solucion = COALESCE(?, nota_solucion), resuelto_en = '
+                . ($estado === 'resuelta' ? 'NOW()' : 'NULL') . ' WHERE id = ?',
+            [$estado, $this->u['id'], self::textoONulo($f['nota_solucion'] ?? null, 255), $id]
         );
     }
 
@@ -560,7 +555,7 @@ final class Guardado
         if (!$rutaId && !$paradaId) {
             throw new ErrorApi('Solicitud no válida.');
         }
-        return self::insertar('INSERT INTO historial_consulta (usuario_id, ruta_id, parada_id, consultado_en) VALUES (?, ?, ?, NOW())', [$this->u['id'], $rutaId, $paradaId]);
+        return insertar('INSERT INTO historial_consulta (usuario_id, ruta_id, parada_id, consultado_en) VALUES (?, ?, ?, NOW())', [$this->u['id'], $rutaId, $paradaId]);
     }
 
     private function editarHistorial(int $id, array $f): void
@@ -577,12 +572,16 @@ final class Guardado
     }
 }
 
-/** Convierte errores de MySQL (duplicados, llaves foráneas) en mensajes para el usuario. */
+/** Convierte errores de la base (duplicados, llaves foráneas) en mensajes para el usuario. */
 function errorDeBaseDeDatos(PDOException $e): Throwable
 {
+    $estado = (string) ($e->errorInfo[0] ?? '');
     $codigo = (int) ($e->errorInfo[1] ?? 0);
     $detalle = (string) ($e->errorInfo[2] ?? '');
-    if ($codigo === 1062) {
+    $tipo = esPostgres()
+        ? (['23505' => 'duplicado', '23503' => 'relacion'][$estado] ?? (in_array($estado, ['23502', '23514', '22001', '22003', '22P02', '22007'], true) ? 'formato' : ''))
+        : ([1062 => 'duplicado', 1451 => 'relacion', 1452 => 'relacion'][$codigo] ?? (in_array($codigo, [1048, 1264, 1265, 1366, 1406], true) ? 'formato' : ''));
+    if ($tipo === 'duplicado') {
         $mensajes = [
             'uq_usuario_email' => 'Ese correo ya está registrado.',
             'uq_chofer_licencia' => 'Ese número de licencia ya está registrado.',
@@ -600,10 +599,10 @@ function errorDeBaseDeDatos(PDOException $e): Throwable
         }
         return new ErrorApi('Ese registro ya existe.', 409);
     }
-    if ($codigo === 1452 || $codigo === 1451) {
+    if ($tipo === 'relacion') {
         return new ErrorApi('Uno de los datos relacionados ya no existe o cambió. Recarga la página e intenta de nuevo.', 409);
     }
-    if (in_array($codigo, [1048, 1264, 1265, 1366, 1406], true)) {
+    if ($tipo === 'formato') {
         return new ErrorApi('Revisa los datos: alguno está vacío, es demasiado largo o no tiene el formato correcto.');
     }
     return $e;

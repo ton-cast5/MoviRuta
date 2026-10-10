@@ -3,3 +3,6 @@
 .DS_Store
 Thumbs.db
 api/config.local.php
+database/sincronizacion.log
+database/.huella_sincronizacion
+.vercel

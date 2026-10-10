@@ -1,3 +1,3 @@
-<FilesMatch "^(_base|config|config\.local)\.php$">
+<FilesMatch "^(_base|_conexion|config|config\.local)\.php$">
     Require all denied
 </FilesMatch>

@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-const CONFIG_API = __DIR__ . '/config.php';
-$GLOBALS['config'] = require CONFIG_API;
+require __DIR__ . '/_conexion.php';
+$GLOBALS['config'] = require __DIR__ . '/config.php';
 date_default_timezone_set($GLOBALS['config']['zona_horaria']);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -36,30 +36,37 @@ function db(): PDO
 {
     static $pdo = null;
     if ($pdo === null) {
-        $c = $GLOBALS['config'];
-        $opciones = [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ];
-        if ($c['ssl_ca'] !== '') {
-            $opciones[PDO::MYSQL_ATTR_SSL_CA] = str_starts_with($c['ssl_ca'], '/') ? $c['ssl_ca'] : __DIR__ . '/' . $c['ssl_ca'];
-            $opciones[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
-        }
         try {
-            $pdo = new PDO(
-                "mysql:host={$c['host']};port={$c['puerto']};dbname={$c['base']};charset=utf8mb4",
-                $c['usuario'],
-                $c['password'],
-                $opciones
-            );
+            $pdo = conectarBase($GLOBALS['config'], $GLOBALS['config']['zona_horaria']);
         } catch (PDOException $e) {
             error_log('MoviRuta: ' . $e->getMessage());
-            throw new ErrorApi('No se pudo conectar con la base de datos MoviRuta. Revisa que MySQL esté encendido y los datos de api/config.php.', 503);
+            throw new ErrorApi(esPostgres()
+                ? 'No se pudo conectar con la base de datos MoviRuta en Supabase. Revisa tu conexión a internet y los datos de conexión.'
+                : 'No se pudo conectar con la base de datos MoviRuta. Revisa que MySQL esté encendido y los datos de api/config.php.', 503);
         }
-        $pdo->exec("SET SESSION sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO'");
     }
     return $pdo;
+}
+
+function esPostgres(): bool
+{
+    return $GLOBALS['config']['motor'] === 'pgsql';
+}
+
+/** Expresión SQL con los segundos Unix de una columna de fecha. */
+function segundos(string $columna): string
+{
+    return esPostgres() ? "EXTRACT(EPOCH FROM {$columna})" : "UNIX_TIMESTAMP({$columna})";
+}
+
+/** Ejecuta un INSERT y devuelve el id de la fila nueva. */
+function insertar(string $sql, array $parametros): int
+{
+    if (esPostgres()) {
+        return (int) fila($sql . ' RETURNING id', $parametros)['id'];
+    }
+    ejecutar($sql, $parametros);
+    return (int) db()->lastInsertId();
 }
 
 function consultar(string $sql, array $parametros = []): array
@@ -84,47 +91,53 @@ function ejecutar(string $sql, array $parametros = []): int
     return $st->rowCount();
 }
 
+/**
+ * Varias consultas SELECT ['nombre' => sql o [sql, parámetros]] → ['nombre' => filas]. En Supabase viajan juntas en
+ * una sola ida a la base: desde fuera de Vercel cada ida tarda ~0.3 s.
+ */
+function consultarVarias(array $consultas): array
+{
+    if (!esPostgres()) {
+        return array_map(fn ($c) => is_array($c) ? consultar($c[0], $c[1]) : consultar($c), $consultas);
+    }
+    $columnas = [];
+    $parametros = [];
+    foreach ($consultas as $nombre => $c) {
+        [$sql, $p] = is_array($c) ? $c : [$c, []];
+        $columnas[] = "(SELECT COALESCE(json_agg(x), '[]'::json) FROM ({$sql}) x) AS \"{$nombre}\"";
+        array_push($parametros, ...$p);
+    }
+    return array_map(fn ($json) => json_decode($json, true), fila('SELECT ' . implode(', ', $columnas), $parametros));
+}
+
 /*
- * Sesiones guardadas en MySQL (tabla sesion) en lugar de archivos: en Vercel cada petición puede atenderla un
- * servidor distinto, y con archivos la sesión se perdería.
+ * Sesiones guardadas en la base de datos (tabla sesion) en lugar de archivos: en Vercel cada petición puede atenderla
+ * un servidor distinto, y con archivos la sesión se perdería.
  */
 const DURACION_SESION = 8 * 3600;
-
-final class SesionesMySQL implements SessionHandlerInterface
-{
-    public function open(string $ruta, string $nombre): bool { return true; }
-    public function close(): bool { return true; }
-
-    public function read(string $id): string
-    {
-        return fila('SELECT datos FROM sesion WHERE id = ? AND expira > UNIX_TIMESTAMP()', [$id])['datos'] ?? '';
-    }
-
-    public function write(string $id, string $datos): bool
-    {
-        ejecutar(
-            'INSERT INTO sesion (id, datos, expira) VALUES (?, ?, UNIX_TIMESTAMP() + ?) ON DUPLICATE KEY UPDATE datos = VALUES(datos), expira = VALUES(expira)',
-            [$id, $datos, DURACION_SESION]
-        );
-        return true;
-    }
-
-    public function destroy(string $id): bool
-    {
-        ejecutar('DELETE FROM sesion WHERE id = ?', [$id]);
-        return true;
-    }
-
-    public function gc(int $vigencia): int
-    {
-        return ejecutar('DELETE FROM sesion WHERE expira < UNIX_TIMESTAMP()');
-    }
-}
 
 ini_set('session.gc_maxlifetime', (string) DURACION_SESION);
 ini_set('session.gc_probability', '1');
 ini_set('session.gc_divisor', '100');
-session_set_save_handler(new SesionesMySQL(), true);
+// Con funciones y no con una clase SessionHandlerInterface: en PHP 8.3 de WAMP, OPcache se cae al compilar esa clase
+// cuando la extensión pdo_pgsql está cargada.
+session_set_save_handler(
+    fn (): bool => true,
+    fn (): bool => true,
+    fn (string $id): string => fila('SELECT datos FROM sesion WHERE id = ? AND expira > ?', [$id, time()])['datos'] ?? '',
+    function (string $id, string $datos): bool {
+        ejecutar(
+            esPostgres()
+                ? 'INSERT INTO sesion (id, datos, expira) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, expira = EXCLUDED.expira'
+                : 'INSERT INTO sesion (id, datos, expira) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE datos = VALUES(datos), expira = VALUES(expira)',
+            [$id, $datos, time() + DURACION_SESION]
+        );
+        return true;
+    },
+    fn (string $id): bool => ejecutar('DELETE FROM sesion WHERE id = ?', [$id]) >= 0,
+    fn (): int => ejecutar('DELETE FROM sesion WHERE expira < ?', [time()]),
+);
+register_shutdown_function('session_write_close');
 session_name('moviruta');
 session_set_cookie_params([
     'httponly' => true,
@@ -184,20 +197,43 @@ function bin(mixed $v): bool { return (int) $v === 1; }
 
 function instantanea(?array $u): array
 {
+    $t = consultarVarias([
+        'usuarios' => 'SELECT id, rol, nombre, email, activo, ' . segundos('ultimo_acceso') . ' AS ultimo_acceso FROM usuario ORDER BY id',
+        'lineas' => 'SELECT * FROM linea_transporte ORDER BY id',
+        'choferes' => 'SELECT * FROM chofer ORDER BY id',
+        'vehiculos' => 'SELECT * FROM vehiculo ORDER BY id',
+        'paradas' => 'SELECT * FROM parada ORDER BY id',
+        'ruta_parada' => 'SELECT ruta_id, parada_id FROM ruta_parada ORDER BY ruta_id, orden',
+        'recorridos' => 'SELECT ruta_id, latitud, longitud FROM recorrido_punto ORDER BY ruta_id, orden',
+        'rutas' => 'SELECT * FROM ruta ORDER BY id',
+        'viajes' => 'SELECT id, chofer_id, vehiculo_id, ruta_id, ' . segundos('inicio') . ' AS inicio, ' . segundos('fin') . ' AS fin, pasajeros_salida, estado FROM viaje ORDER BY id',
+        'reportes' => 'SELECT id, ruta_id, usuario_id, descripcion, contacto, latitud, longitud, estado, ' . segundos('creado_en') . ' AS creado_en, revisado_por, ' . segundos('revisado_en') . ' AS revisado_en FROM reporte_accidente ORDER BY id',
+        'fallas' => 'SELECT id, vehiculo_id, tipo, descripcion, impide_circular, estado, reportado_por, viaje_id, ' . segundos('creado_en') . ' AS creado_en, atendido_por, nota_solucion, ' . segundos('resuelto_en') . ' AS resuelto_en FROM falla_vehiculo ORDER BY id',
+        'historial' => ['SELECT id, usuario_id, ruta_id, parada_id, ' . segundos('consultado_en') . ' AS consultado_en FROM historial_consulta WHERE usuario_id = ? ORDER BY id', [$u['id'] ?? 0]],
+    ]);
+
     $esAdmin = $u && $u['rol'] === 'admin';
-    $misLineas = $u && $u['rol'] === 'dueno' ? lineasDeDueno($u['id']) : [];
+    $misLineas = [];
+    if ($u && $u['rol'] === 'dueno') {
+        foreach ($t['lineas'] as $l) {
+            if ((int) $l['dueno_id'] === $u['id']) {
+                $misLineas[] = (int) $l['id'];
+            }
+        }
+    }
     $miChofer = null;
     $miLineaChofer = null;
-    if ($u && $u['rol'] === 'chofer') {
-        $c = fila('SELECT id, linea_id FROM chofer WHERE usuario_id = ?', [$u['id']]);
-        $miChofer = $c ? (int) $c['id'] : null;
-        $miLineaChofer = $c ? (int) $c['linea_id'] : null;
+    foreach ($u && $u['rol'] === 'chofer' ? $t['choferes'] : [] as $c) {
+        if ((int) $c['usuario_id'] === $u['id']) {
+            $miChofer = (int) $c['id'];
+            $miLineaChofer = (int) $c['linea_id'];
+        }
     }
 
     $choferes = array_map(fn ($c) => [
         'id' => (int) $c['id'], 'usuario_id' => (int) $c['usuario_id'], 'linea_id' => (int) $c['linea_id'],
         'numero_licencia' => $c['numero_licencia'], 'telefono' => $c['telefono'], 'activo' => bin($c['activo']),
-    ], consultar('SELECT * FROM chofer ORDER BY id'));
+    ], $t['choferes']);
     $usuariosDeMisChoferes = [];
     foreach ($choferes as $i => $c) {
         $visible = $esAdmin || in_array($c['linea_id'], $misLineas, true) || $c['id'] === $miChofer;
@@ -209,7 +245,7 @@ function instantanea(?array $u): array
     }
 
     $usuarios = [];
-    foreach (consultar('SELECT id, rol, nombre, email, activo, UNIX_TIMESTAMP(ultimo_acceso) AS ultimo_acceso FROM usuario ORDER BY id') as $f) {
+    foreach ($t['usuarios'] as $f) {
         $id = (int) $f['id'];
         $fila = ['id' => $id, 'rol' => $f['rol'], 'nombre' => $f['nombre'], 'activo' => bin($f['activo'])];
         if ($esAdmin || ($u && $u['id'] === $id) || isset($usuariosDeMisChoferes[$id])) {
@@ -222,26 +258,26 @@ function instantanea(?array $u): array
     $lineas = array_map(fn ($l) => [
         'id' => (int) $l['id'], 'nombre' => $l['nombre'], 'descripcion' => $l['descripcion'], 'telefono' => $l['telefono'],
         'dueno_id' => ent($l['dueno_id']), 'activa' => bin($l['activa']),
-    ], consultar('SELECT * FROM linea_transporte ORDER BY id'));
+    ], $t['lineas']);
 
     $vehiculos = array_map(fn ($v) => [
         'id' => (int) $v['id'], 'linea_id' => (int) $v['linea_id'], 'numero_unidad' => $v['numero_unidad'], 'placa' => $v['placa'],
         'modelo' => $v['modelo'], 'capacidad' => ent($v['capacidad']), 'cuenta_con_gps' => bin($v['cuenta_con_gps']),
         'climatizado' => bin($v['climatizado']), 'tv_a_bordo' => bin($v['tv_a_bordo']), 'accesible' => bin($v['accesible']),
         'activo' => bin($v['activo']),
-    ], consultar('SELECT * FROM vehiculo ORDER BY id'));
+    ], $t['vehiculos']);
 
     $paradas = array_map(fn ($p) => [
         'id' => (int) $p['id'], 'nombre' => $p['nombre'], 'referencia' => $p['referencia'], 'latitud' => (float) $p['latitud'],
         'longitud' => (float) $p['longitud'], 'codigo' => $p['codigo'], 'activa' => bin($p['activa']),
-    ], consultar('SELECT * FROM parada ORDER BY id'));
+    ], $t['paradas']);
 
     $paradasDeRuta = [];
-    foreach (consultar('SELECT ruta_id, parada_id FROM ruta_parada ORDER BY ruta_id, orden') as $rp) {
+    foreach ($t['ruta_parada'] as $rp) {
         $paradasDeRuta[(int) $rp['ruta_id']][] = (int) $rp['parada_id'];
     }
     $trazos = [];
-    foreach (consultar('SELECT ruta_id, latitud, longitud FROM recorrido_punto ORDER BY ruta_id, orden') as $p) {
+    foreach ($t['recorridos'] as $p) {
         $trazos[(int) $p['ruta_id']][] = [(float) $p['latitud'], (float) $p['longitud']];
     }
     $lineaDeRuta = [];
@@ -255,10 +291,10 @@ function instantanea(?array $u): array
             'estado_servicio' => $r['estado_servicio'], 'aviso' => $r['aviso'], 'activa' => bin($r['activa']),
             'paradas' => $paradasDeRuta[$id] ?? [], 'recorrido' => $trazos[$id] ?? [],
         ];
-    }, consultar('SELECT * FROM ruta ORDER BY id'));
+    }, $t['rutas']);
 
     $viajes = [];
-    foreach (consultar('SELECT id, chofer_id, vehiculo_id, ruta_id, UNIX_TIMESTAMP(inicio) AS inicio, UNIX_TIMESTAMP(fin) AS fin, pasajeros_salida, estado FROM viaje ORDER BY id') as $v) {
+    foreach ($t['viajes'] as $v) {
         $linea = $lineaDeRuta[(int) $v['ruta_id']] ?? 0;
         $visible = $v['estado'] === 'en_curso' || $esAdmin || in_array($linea, $misLineas, true) || (int) $v['chofer_id'] === $miChofer;
         if ($visible) {
@@ -272,7 +308,7 @@ function instantanea(?array $u): array
 
     $reportes = [];
     if ($esAdmin || $misLineas) {
-        foreach (consultar('SELECT id, ruta_id, usuario_id, descripcion, contacto, latitud, longitud, estado, UNIX_TIMESTAMP(creado_en) AS creado_en, revisado_por, UNIX_TIMESTAMP(revisado_en) AS revisado_en FROM reporte_accidente ORDER BY id') as $r) {
+        foreach ($t['reportes'] as $r) {
             if ($esAdmin || in_array($lineaDeRuta[(int) $r['ruta_id']] ?? 0, $misLineas, true)) {
                 $reportes[] = [
                     'id' => (int) $r['id'], 'ruta_id' => (int) $r['ruta_id'], 'usuario_id' => ent($r['usuario_id']),
@@ -288,7 +324,7 @@ function instantanea(?array $u): array
     // (para saber si una unidad no tiene clima o rampa, o no puede circular).
     $lineaDeVehiculo = array_column($vehiculos, 'linea_id', 'id');
     $fallas = [];
-    foreach (consultar('SELECT id, vehiculo_id, tipo, descripcion, impide_circular, estado, reportado_por, viaje_id, UNIX_TIMESTAMP(creado_en) AS creado_en, atendido_por, nota_solucion, UNIX_TIMESTAMP(resuelto_en) AS resuelto_en FROM falla_vehiculo ORDER BY id') as $f) {
+    foreach ($t['fallas'] as $f) {
         $linea = $lineaDeVehiculo[(int) $f['vehiculo_id']] ?? 0;
         $base = ['id' => (int) $f['id'], 'vehiculo_id' => (int) $f['vehiculo_id'], 'tipo' => $f['tipo'], 'impide_circular' => bin($f['impide_circular']), 'estado' => $f['estado']];
         if ($esAdmin || in_array($linea, $misLineas, true) || $linea === $miLineaChofer) {
@@ -305,7 +341,7 @@ function instantanea(?array $u): array
     $historial = $u ? array_map(fn ($h) => [
         'id' => (int) $h['id'], 'usuario_id' => (int) $h['usuario_id'], 'ruta_id' => ent($h['ruta_id']),
         'parada_id' => ent($h['parada_id']), 'consultado_en' => ms($h['consultado_en']),
-    ], consultar('SELECT id, usuario_id, ruta_id, parada_id, UNIX_TIMESTAMP(consultado_en) AS consultado_en FROM historial_consulta WHERE usuario_id = ? ORDER BY id', [$u['id']])) : [];
+    ], $t['historial']) : [];
 
     return [
         'version' => 'servidor',

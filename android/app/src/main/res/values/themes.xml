@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.MoviRuta" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fondo</item>
+        <item name="android:colorPrimary">@color/primario</item>
+        <item name="android:colorAccent">@color/primario</item>
+    </style>
+
+    <style name="Theme.MoviRuta.Inicio" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/primario</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.MoviRuta</item>
+    </style>
+</resources>

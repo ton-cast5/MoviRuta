@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MoviRuta · Crear cuenta</title>
+    <meta name="theme-color" content="#004532">
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+    <link rel="manifest" href="manifest.webmanifest">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="assets/css/moviruta.css">
+</head>
+<body class="bg-surface font-sans text-on-surface" data-base="." data-pagina="login">
+<a class="saltar-contenido" href="#contenido">Saltar al contenido</a>
+<div id="mr-encabezado" class="fixed inset-x-0 top-0 z-[1500] h-20 bg-primary"></div>
+
+<main id="contenido" class="pt-20">
+    <section class="relative overflow-hidden bg-primary">
+        <div class="mr-hero-rejilla absolute inset-0"></div>
+        <div class="mr-hero-luz uno -left-24 top-10 h-80 w-80 bg-secondary/40 blur-[90px]"></div>
+        <div class="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-[480px] items-center px-margin py-12 md:px-margin-tablet">
+            <div class="w-full rounded-2xl bg-surface-container-lowest p-6 shadow-2xl ring-1 ring-black/5 md:p-8">
+                <div class="text-center">
+                    <img src="assets/img/logo.svg" alt="" width="118" height="56" class="mx-auto mb-3 h-14 w-auto">
+                    <h1 class="font-headline-md text-headline-md text-primary">Crear cuenta de pasajero</h1>
+                    <p class="mt-1 text-sm text-on-surface-variant">Regístrate para usar tu panel. Choferes y dueños los da de alta la administración.</p>
+                </div>
+                <div id="errorRegistro" class="mt-5 hidden items-start gap-2 rounded-lg bg-error-container p-3 text-sm text-on-error-container" role="alert"></div>
+                <form id="formRegistro" class="mt-5 flex flex-col gap-4" novalidate>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label class="mr-etiqueta-campo" for="nombre">Nombre</label>
+                            <input class="mr-campo" type="text" id="nombre" required maxlength="100" autocomplete="given-name">
+                        </div>
+                        <div>
+                            <label class="mr-etiqueta-campo" for="apellido">Apellido</label>
+                            <input class="mr-campo" type="text" id="apellido" required maxlength="100" autocomplete="family-name">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="mr-etiqueta-campo" for="email">Correo electrónico</label>
+                        <input class="mr-campo" type="email" id="email" required maxlength="150" autocomplete="email">
+                    </div>
+                    <div>
+                        <label class="mr-etiqueta-campo" for="password">Contraseña (mín. 8)</label>
+                        <input class="mr-campo" type="password" id="password" required minlength="8" maxlength="100" autocomplete="new-password">
+                    </div>
+                    <div>
+                        <label class="mr-etiqueta-campo" for="password2">Confirmar contraseña</label>
+                        <input class="mr-campo" type="password" id="password2" required minlength="8" maxlength="100" autocomplete="new-password">
+                    </div>
+                    <button class="mr-btn mr-btn-primario w-full !py-3" type="submit"><span class="material-symbols-outlined">person_add</span> Registrarme</button>
+                </form>
+                <p class="mt-5 text-center text-sm text-on-surface-variant">¿Ya tienes cuenta? <a class="mr-enlace" href="login.html">Inicia sesión</a>.</p>
+            </div>
+        </div>
+    </section>
+</main>
+<div id="mr-pie"></div>
+<script src="assets/js/datos.js"></script>
+<script src="assets/js/servicios.js"></script>
+<script src="assets/js/moviruta.js"></script>
+<script src="assets/js/interfaz.js"></script>
+<script src="assets/js/registro.js"></script>
+</body>
+</html>

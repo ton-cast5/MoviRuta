@@ -1,4 +1,7 @@
 database/
+android/
+backend/config.local.json
 api/config.local.php
 *.md
 .htaccess
+D:\Temp/

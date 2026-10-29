@@ -689,8 +689,8 @@ const MRServicios = (() => {
             const salida = tramos.map((t) => {
                 const { ruta, paradas } = t.d;
                 minutos += t.minutos;
-                const t = ruta.tarifa_gral ?? ruta.tarifa;
-                if (t === null || t === undefined) tarifaConocida = false; else tarifa += Number(t);
+                const precio = ruta.tarifa_gral ?? ruta.tarifa;
+                if (precio === null || precio === undefined) tarifaConocida = false; else tarifa += Number(precio);
                 return {
                     ruta: {
                         id: ruta.id, codigo: ruta.codigo, nombre: ruta.nombre, linea: ruta.linea, origen: ruta.origen, destino: ruta.destino,

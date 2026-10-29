@@ -58,6 +58,18 @@ const MRUI = (() => {
 
     const iniciales = (nombre) => String(nombre || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
 
+    /** Enlaces del panel para el menú hamburguesa (celular): evita duplicar Inicio/Rutas/Paradas/Mapa públicos. */
+    function htmlMenuPanelMovil() {
+        if (!usuario) return '';
+        const publicas = new Set(NAVEGACION.map(([, , ruta]) => ruta));
+        const items = (MENUS[usuario.rol] || []).filter(([, , ruta]) => !publicas.has(ruta));
+        if (!items.length) {
+            return `<a class="mr-nav-enlace" href="${url(S.PANELES[usuario.rol])}">${icono('space_dashboard')}Mi panel</a>`;
+        }
+        return items.map(([clave, texto, ruta, ic]) =>
+            `<a class="mr-nav-enlace" href="${url(ruta)}">${icono(ic)}${esc(texto)}</a>`).join('');
+    }
+
     /* ---------------- Avisos emergentes ---------------- */
 
     function contenedorAvisos() {
@@ -391,7 +403,7 @@ const MRUI = (() => {
                 </div>
             </div>
             <nav class="mr-menu-movil hidden border-t border-white/10 bg-primary px-margin pb-4 pt-2 md:hidden" data-menu-movil aria-label="Principal">
-                <div class="grid gap-1">${enlaces}${usuario ? `<a class="mr-nav-enlace" href="${url(S.PANELES[usuario.rol])}">${icono('space_dashboard')}Mi panel</a>` : ''}</div>
+                <div class="grid gap-1">${enlaces}${htmlMenuPanelMovil()}</div>
             </nav>`;
         destino.replaceWith(encabezadoEl);
 
@@ -573,6 +585,35 @@ const MRUI = (() => {
         return true;
     }
 
+    /**
+     * Lateral del panel: en celular se oculta el menú completo (ya está en el hamburguesa / cajón)
+     * y solo queda un atajo a «Buscar ruta» cuando el perfil lo tiene.
+     */
+    function htmlAsidePanel(menu, seccion, u) {
+        const atajo = menu.find(([clave]) => clave === 'buscar');
+        const claseAside = atajo
+            ? 'mr-panel-aside mr-panel-aside--atajo mr-tarjeta mr-anim-escala h-fit p-3 lg:sticky lg:top-24'
+            : 'mr-panel-aside mr-tarjeta mr-anim-escala h-fit p-3 hidden lg:block lg:sticky lg:top-24';
+        const atajoHtml = atajo
+            ? `<a class="mr-panel-atajo-movil lg:hidden flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-primary-container" href="${url(atajo[2])}">${icono(atajo[3] || 'search')}${esc(atajo[1])}</a>`
+            : '';
+        return `
+            <aside class="${claseAside}" data-oculto-impresion>
+                <div class="mr-panel-perfil mb-2 hidden items-center gap-3 rounded-lg bg-surface-container-low p-3 lg:flex">
+                    <span class="mr-avatar h-11 w-11 text-sm">${esc(iniciales(u.nombre))}</span>
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-semibold text-on-surface">${esc(u.nombre)}</p>
+                        <p class="truncate text-xs text-on-surface-variant">${esc(u.email)}</p>
+                    </div>
+                </div>
+                <nav class="mr-panel-nav no-scrollbar hidden flex-col gap-1 lg:flex" aria-label="Menú del panel">
+                    ${menu.map(([clave, texto, ruta, ic]) => `<a href="${url(ruta)}" class="${clave === seccion ? 'activo' : ''}"${clave === seccion ? ' aria-current="page"' : ''}>${icono(ic)}${texto}</a>`).join('')}
+                    <button type="button" data-cerrar-sesion-panel class="mt-1 flex items-center gap-3 rounded-[.6rem] px-[.85rem] py-[.65rem] text-sm font-semibold text-error transition-colors hover:bg-error-container/60">${icono('logout')}Cerrar sesión</button>
+                </nav>
+                ${atajoHtml}
+            </aside>`;
+    }
+
     function panel() {
         const contenido = document.getElementById('mr-panel');
         if (!contenido || !usuario) return;
@@ -597,29 +638,20 @@ const MRUI = (() => {
                 </div>
             </section>
             <div class="relative mx-auto -mt-16 grid max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-6 px-margin pb-16 md:px-margin-tablet lg:grid-cols-[264px_minmax(0,1fr)] lg:px-margin-desktop">
-                <aside class="mr-tarjeta mr-anim-escala h-fit p-3 lg:sticky lg:top-24" data-oculto-impresion>
-                    <div class="mb-2 hidden items-center gap-3 rounded-lg bg-surface-container-low p-3 lg:flex">
-                        <span class="mr-avatar h-11 w-11 text-sm">${esc(iniciales(usuario.nombre))}</span>
-                        <div class="min-w-0">
-                            <p class="truncate text-sm font-semibold text-on-surface">${esc(usuario.nombre)}</p>
-                            <p class="truncate text-xs text-on-surface-variant">${esc(usuario.email)}</p>
-                        </div>
-                    </div>
-                    <nav class="mr-panel-nav no-scrollbar flex gap-1 overflow-x-auto lg:flex-col" aria-label="Menú del panel">
-                        ${menu.map(([clave, texto, ruta, ic]) => `<a href="${url(ruta)}" class="${clave === seccion ? 'activo' : ''}"${clave === seccion ? ' aria-current="page"' : ''}>${icono(ic)}${texto}</a>`).join('')}
-                        <button type="button" data-cerrar-sesion-panel class="mt-1 hidden items-center gap-3 rounded-[.6rem] px-[.85rem] py-[.65rem] text-sm font-semibold text-error transition-colors hover:bg-error-container/60 lg:flex">${icono('logout')}Cerrar sesión</button>
-                    </nav>
-                </aside>
+                ${htmlAsidePanel(menu, seccion, usuario)}
                 <main id="contenido" class="min-w-0 mr-anim-subir" style="--retraso:120ms"></main>
             </div>`;
         contenido.replaceWith(envoltura);
         const principal = envoltura.querySelector('main');
         principal.id = 'contenido';
         while (contenido.firstChild) principal.appendChild(contenido.firstChild);
-        envoltura.querySelector('[data-cerrar-sesion-panel]').addEventListener('click', () => {
-            S.sesion.cerrarSesion();
-            ir('index.html', 'Cerraste sesión. ¡Hasta pronto!', 'info');
-        });
+        const cerrar = envoltura.querySelector('[data-cerrar-sesion-panel]');
+        if (cerrar) {
+            cerrar.addEventListener('click', () => {
+                S.sesion.cerrarSesion();
+                ir('index.html', 'Cerraste sesión. ¡Hasta pronto!', 'info');
+            });
+        }
     }
 
     function tituloPanel(titulo, subtitulo) {

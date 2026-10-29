@@ -389,13 +389,16 @@ input[type="color"].mr-campo { padding: .25rem; height: 46px; cursor: pointer; }
 .mr-aviso .progreso { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: currentColor; opacity: .15; transform-origin: left; animation: mr-progreso linear forwards; }
 
 /* ---------- Paneles por perfil ---------- */
-.mr-panel-nav a {
+.mr-panel-nav a,
+.mr-panel-nav button[data-cerrar-sesion-panel] {
     display: flex; align-items: center; gap: .75rem; padding: .65rem .85rem; border-radius: .6rem; color: var(--texto-suave);
     font: 600 14px/20px Inter, sans-serif; text-decoration: none; white-space: nowrap; transition: background-color .2s ease, color .2s ease, transform .2s var(--curva);
 }
-.mr-panel-nav a .material-symbols-outlined { font-size: 21px; }
+.mr-panel-nav a .material-symbols-outlined,
+.mr-panel-nav button .material-symbols-outlined { font-size: 21px; }
 .mr-panel-nav a:hover { background: var(--sup-baja); color: var(--primario); transform: translateX(3px); }
 .mr-panel-nav a.activo { background: var(--primario); color: #fff; box-shadow: 0 6px 16px -6px rgba(0, 69, 50, .55); transform: none; }
+.mr-panel-atajo-movil .material-symbols-outlined { font-size: 22px; }
 .mr-avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: linear-gradient(135deg, var(--secundario), var(--primario)); color: #fff; font-weight: 700; flex-shrink: 0; }
 
 .mr-stat { position: relative; overflow: hidden; display: block; padding: 1.25rem; text-decoration: none; color: inherit; }

@@ -18,8 +18,12 @@ object GuionesWeb {
         html.mr-app #mr-avisos { top: 1rem !important; left: 1rem; right: 1rem; align-items: center; }
         @media (min-width: 1024px) { html.mr-app .lg\:top-24 { top: 1.5rem !important; } }
         html.mr-app { -webkit-tap-highlight-color: transparent; }
-        /* El menú del panel vive en el cajón nativo: sin aside ni scroll horizontal web */
-        html.mr-app aside[data-oculto-impresion], html.mr-app .mr-panel-nav { display: none !important; }
+        /* Menú del panel en el cajón nativo; en celular solo queda el atajo «Buscar ruta» si existe */
+        html.mr-app .mr-panel-nav,
+        html.mr-app .mr-panel-perfil { display: none !important; }
+        html.mr-app aside.mr-panel-aside:not(.mr-panel-aside--atajo) { display: none !important; }
+        html.mr-app aside.mr-panel-aside--atajo { display: block !important; }
+        html.mr-app .mr-panel-atajo-movil { display: flex !important; }
         html.mr-app .lg\:grid-cols-\[264px_minmax\(0\,1fr\)\] { grid-template-columns: minmax(0,1fr) !important; }
     """.trimIndent()
 

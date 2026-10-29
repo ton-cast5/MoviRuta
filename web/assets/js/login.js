@@ -20,8 +20,8 @@
 
     const CUENTAS = [
         ['pasajero@moviruta.local', 'Pasajero', 'person', 'Sofía Hernández'],
-        ['chofer.juan@moviruta.local', 'Chofer', 'steering', 'Juan Pérez'],
-        ['dueno.centro@moviruta.local', 'Dueño de línea', 'business_center', 'Laura Méndez'],
+        ['chofer.maria@moviruta.local', 'Chofer', 'steering', 'María López'],
+        ['dueno.paraiso@moviruta.local', 'Dueño de línea', 'business_center', 'Martha Jiménez'],
         ['admin@moviruta.local', 'Administrador', 'admin_panel_settings', 'Administrador General'],
     ];
     $('cuentasDemo').innerHTML = CUENTAS.map(([email, rol, ic, nombre], i) => `

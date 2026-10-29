@@ -137,13 +137,19 @@ const MRP = (() => {
             `<a class="mr-btn mr-btn-primario mt-3" href="${enlace(pagina)}">${icono('arrow_back')} ${esc(texto)}</a>`)}</div>`;
     }
 
-    /** Tarjeta de estadística con conteo animado. */
-    const estadistica = (etiqueta, valor, ic, href, retraso = 0) => `
+    /** Tarjeta de estadística; si valor es número anima el conteo, si no muestra el texto. */
+    const estadistica = (etiqueta, valor, ic, href, retraso = 0) => {
+        const n = Number(valor);
+        const valorHtml = Number.isFinite(n) && String(valor).trim() !== ''
+            ? `<p class="mr-stat-valor" data-contar="${n}">0</p>`
+            : `<p class="mr-stat-valor">${esc(String(valor))}</p>`;
+        return `
         <a class="mr-tarjeta mr-tarjeta-interactiva mr-stat mr-anim-subir" style="--retraso:${retraso}ms" href="${href}">
             <span class="mr-stat-icono">${icono(ic)}</span>
-            <p class="mr-stat-valor" data-contar="${Number(valor) || 0}">0</p>
+            ${valorHtml}
             <p class="mr-stat-etiqueta">${esc(etiqueta)}</p>
         </a>`;
+    };
 
     const estadoActivo = (activo, si = 'Activo', no = 'Inactivo') =>
         activo ? `<span class="mr-etiqueta">${icono('check_circle', 'text-secondary')}${esc(si)}</span>` : `<span class="mr-estado suspendido">${icono('block')}${esc(no)}</span>`;

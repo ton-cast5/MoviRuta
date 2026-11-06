@@ -35,7 +35,7 @@
                     <div class="mt-auto flex flex-wrap items-center gap-2 pt-4">
                         <span class="mr-etiqueta">${icono('sync_alt')} ${esc(r.sentido)}</span>
                         <span class="mr-etiqueta">${icono('location_on')} ${r.total_paradas} paradas</span>
-                        <span class="mr-etiqueta">${icono('payments')} ${esc(r.tarifa_texto)}</span>
+                        ${MR.htmlTarifas(r)}
                         ${MR.estadoHtml(r.estado_servicio, r.estado_texto)}
                     </div>
                 </div>

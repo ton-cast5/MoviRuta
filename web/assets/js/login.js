@@ -39,7 +39,8 @@
         const b = e.target.closest('[data-email]');
         if (!b) return;
         email.value = b.dataset.email;
-        password.value = 'moviruta123';
+        password.value = '';
+        password.focus();
         [email, password].forEach((c) => c.classList.remove('invalido'));
         error.classList.add('hidden');
         form.querySelector('[type=submit]').focus();

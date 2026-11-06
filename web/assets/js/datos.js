@@ -1,6 +1,6 @@
 /**
  * MoviRuta · DATOS DE DEMOSTRACIÓN (modo sin servidor)
- * Alineados al seed de Paraíso (TAB-014-…). Contraseña: moviruta123
+ * Alineados al seed de Paraíso (TAB-014-…). Las contraseñas no se envían al cliente; el login usa el API.
  */
 window.MR_DATOS_DEMO = {
     version: 6,
@@ -11,13 +11,13 @@ window.MR_DATOS_DEMO = {
         { estado_clave: 'TAB', clave: '014', nombre: 'Paraíso' },
     ],
     usuarios: [
-        { id: 'USER-admin-001', rol: 'admin', nombre: 'Administrador', apellido: 'General', email: 'admin@moviruta.local', password: 'moviruta123', activo: true, ultimo_acceso: null },
-        { id: 'USER-dueno-001', rol: 'dueno', nombre: 'Martha', apellido: 'Jiménez', email: 'dueno.paraiso@moviruta.local', password: 'moviruta123', activo: true, ultimo_acceso: null },
-        { id: 'USER-dueno-002', rol: 'dueno', nombre: 'Roberto', apellido: 'Salinas', email: 'dueno.grijalva@moviruta.local', password: 'moviruta123', activo: true, ultimo_acceso: null },
-        { id: 'USER-chofer-001', rol: 'chofer', nombre: 'María', apellido: 'López', email: 'chofer.maria@moviruta.local', password: 'moviruta123', activo: true, ultimo_acceso: null },
-        { id: 'USER-chofer-002', rol: 'chofer', nombre: 'Juan', apellido: 'Pérez', email: 'chofer.juan@moviruta.local', password: 'moviruta123', activo: true, ultimo_acceso: null },
-        { id: 'USER-chofer-003', rol: 'chofer', nombre: 'Javier', apellido: 'Hernández', email: 'chofer.javier@moviruta.local', password: 'moviruta123', activo: true, ultimo_acceso: null },
-        { id: 'USER-pasajero-001', rol: 'pasajero', nombre: 'Sofía', apellido: 'Hernández', email: 'pasajero@moviruta.local', password: 'moviruta123', activo: true, ultimo_acceso: null },
+        { id: 'USER-admin-001', rol: 'admin', nombre: 'Administrador', apellido: 'General', email: 'admin@moviruta.local', activo: true, ultimo_acceso: null },
+        { id: 'USER-dueno-001', rol: 'dueno', nombre: 'Martha', apellido: 'Jiménez', email: 'dueno.paraiso@moviruta.local', activo: true, ultimo_acceso: null },
+        { id: 'USER-dueno-002', rol: 'dueno', nombre: 'Roberto', apellido: 'Salinas', email: 'dueno.grijalva@moviruta.local', activo: true, ultimo_acceso: null },
+        { id: 'USER-chofer-001', rol: 'chofer', nombre: 'María', apellido: 'López', email: 'chofer.maria@moviruta.local', activo: true, ultimo_acceso: null },
+        { id: 'USER-chofer-002', rol: 'chofer', nombre: 'Juan', apellido: 'Pérez', email: 'chofer.juan@moviruta.local', activo: true, ultimo_acceso: null },
+        { id: 'USER-chofer-003', rol: 'chofer', nombre: 'Javier', apellido: 'Hernández', email: 'chofer.javier@moviruta.local', activo: true, ultimo_acceso: null },
+        { id: 'USER-pasajero-001', rol: 'pasajero', nombre: 'Sofía', apellido: 'Hernández', email: 'pasajero@moviruta.local', activo: true, ultimo_acceso: null },
     ],
     lineas: [
         { id: 'TAB-001-TNL', estado_clave: 'TAB', siglas: 'TNL', nombre: 'Transportadora Nicole', descripcion: 'Servicio local en Paraíso y costa (demostración).', telefono: '933 000 0001', duenos: ['USER-dueno-001', 'USER-dueno-002'], activa: true },

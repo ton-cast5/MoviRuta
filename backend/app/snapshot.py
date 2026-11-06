@@ -170,8 +170,12 @@ def instantanea(conn, usuario_id: str | None) -> dict[str, Any]:
             item["seguro_vida"] = _bool(c["seguro_vida"])
         choferes.append(item)
 
-    vehiculos_out = [
-        {
+    vehiculos_out = []
+    for v in vehiculos:
+        ver_seguro = rol == "admin" or (alcance is None and rol == "admin") or (
+            alcance is not None and v["linea_id"] in alcance
+        )
+        item = {
             "id": v["id"],
             "placa": v["placa"],
             "linea_id": v["linea_id"],
@@ -184,11 +188,14 @@ def instantanea(conn, usuario_id: str | None) -> dict[str, Any]:
             "accesible": _bool(v["accesible"]),
             "activo": _bool(v["activo"]),
             "cuenta_con_seguro": _bool(v.get("cuenta_con_seguro")),
-            "nombre_seguro": v.get("nombre_seguro"),
-            "poliza_seguro": v.get("poliza_seguro"),
+            "nombre_seguro": v.get("nombre_seguro") if ver_seguro else None,
+            "poliza_seguro": v.get("poliza_seguro") if ver_seguro else None,
         }
-        for v in vehiculos
-    ]
+        if not ver_seguro:
+            # Público: solo saber si tiene seguro, sin póliza ni aseguradora
+            item["nombre_seguro"] = None
+            item["poliza_seguro"] = None
+        vehiculos_out.append(item)
 
     paradas_out = [
         {

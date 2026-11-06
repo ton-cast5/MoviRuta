@@ -18,5 +18,5 @@ async def bd(request: Request):
             return ok(conn, request, response, datos, sid)
     except db.ErrorBase as e:
         return error(e.mensaje, e.estado)
-    except Exception as e:  # noqa: BLE001
-        return error(f"Error interno: {e}", 500)
+    except Exception:  # noqa: BLE001
+        return error("Error interno del servidor.", 500)

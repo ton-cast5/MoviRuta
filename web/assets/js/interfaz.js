@@ -495,7 +495,7 @@ const MRUI = (() => {
                 <div class="mx-auto flex max-w-[1440px] flex-col gap-2 px-margin py-5 text-xs text-white/55 md:flex-row md:items-center md:justify-between md:px-margin-tablet lg:px-margin-desktop">
                     <p>&copy; ${new Date().getFullYear()} MoviRuta. Todos los derechos reservados.</p>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-                        <span>Datos del mapa &copy; Google · Mapas con <a href="https://leafletjs.com" target="_blank" rel="noopener" class="underline hover:text-white">Leaflet</a></span>
+                        <span>Mapa OpenFreeMap / OSM · <a href="https://leafletjs.com" target="_blank" rel="noopener" class="underline hover:text-white">Leaflet</a> + MapLibre</span>
                         ${S.modoServidor
                             ? `<span class="inline-flex items-center gap-1">${icono('database', 'text-[15px]')} Conectado a la base de datos MoviRuta</span>`
                             : `<button type="button" data-reiniciar-demo class="inline-flex items-center gap-1 hover:text-secondary-container">${icono('restart_alt', 'text-[15px]')} Restablecer datos de demostración</button>`}

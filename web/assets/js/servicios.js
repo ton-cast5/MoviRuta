@@ -698,7 +698,11 @@ const MRServicios = (() => {
                 return {
                     ruta: {
                         id: ruta.id, codigo: ruta.codigo, nombre: ruta.nombre, linea: ruta.linea, origen: ruta.origen, destino: ruta.destino,
-                        sentido: textoSentido(ruta.sentido), color: ruta.color, tarifa_texto: formatoTarifa(ruta.tarifa_gral ?? ruta.tarifa),
+                        sentido: textoSentido(ruta.sentido), color: ruta.color,
+                        tarifa_texto: formatoTarifa(ruta.tarifa_gral ?? ruta.tarifa),
+                        tarifa_edu_texto: formatoTarifa(ruta.tarifa_edu),
+                        tarifa_gral_texto: formatoTarifa(ruta.tarifa_gral ?? ruta.tarifa),
+                        tarifa_inapam_texto: formatoTarifa(ruta.tarifa_inapam),
                         estado_servicio: ruta.estado_servicio, estado_texto: estadoInfo(ruta.estado_servicio).texto, aviso: ruta.aviso,
                     },
                     subir: { id: t.subir.id, nombre: t.subir.nombre },
@@ -712,13 +716,19 @@ const MRServicios = (() => {
             const transbordos = tramos.length - 1;
             if (transbordos) minutos += MINUTOS_TRANSBORDO;
             const caminar = tramos[0].caminar;
+            const eduSum = tramos.reduce((n, t) => n + (Number(t.d.ruta.tarifa_edu) || 0), 0);
+            const inaSum = tramos.reduce((n, t) => n + (Number(t.d.ruta.tarifa_inapam) || 0), 0);
             return {
                 tipo: transbordos ? 'transbordo' : 'directa', transbordos, tramos: salida,
                 caminar_texto: caminar !== null && caminar !== undefined ? `${formatoDistancia(caminar)} a pie hasta la parada` : null,
                 minutos_total: minutos,
                 duracion_total_texto: formatoMinutosAprox(minutos),
                 tarifa_total_texto: tarifaConocida ? formatoTarifa(tarifa) : 'No disponible',
+                tarifa_edu_texto: tarifaConocida ? formatoTarifa(eduSum) : 'No disponible',
+                tarifa_gral_texto: tarifaConocida ? formatoTarifa(tarifa) : 'No disponible',
+                tarifa_inapam_texto: tarifaConocida ? formatoTarifa(inaSum) : 'No disponible',
                 puntaje: minutos + (caminar ?? 0) / VELOCIDAD_CAMINANDO_M_MIN,
+                tarifa_num: tarifaConocida ? tarifa : Number.POSITIVE_INFINITY,
             };
         }
 
@@ -761,15 +771,29 @@ const MRServicios = (() => {
             resultados.push(...transbordos.slice(0, MAX_TRANSBORDOS));
         }
 
-        resultados.sort((x, y) => (opciones.menos_transbordos ? x.transbordos - y.transbordos : 0) || x.puntaje - y.puntaje);
-        resultados.forEach((r) => delete r.puntaje);
+        resultados.sort((x, y) => (opciones.menos_transbordos ? x.transbordos - y.transbordos : 0)
+            || x.puntaje - y.puntaje
+            || x.transbordos - y.transbordos
+            || x.tarifa_num - y.tarifa_num);
+        if (resultados.length) {
+            resultados[0].mejor = true;
+            resultados[0].criterio_mejor = opciones.menos_transbordos
+                ? 'Priorizamos menos transbordos; si empatan, el menor tiempo y luego la tarifa más baja.'
+                : 'Te conviene más por menor tiempo; si empatan, menos transbordos y luego tarifa más baja.';
+        }
+        resultados.forEach((r) => { delete r.puntaje; delete r.tarifa_num; });
 
         if (!resultados.length) {
             return sinResultados(opciones.accesible
                 ? 'No encontramos rutas accesibles entre esos puntos. Quita el filtro "Accesible" para ver todas las opciones.'
                 : 'No encontramos una ruta entre esos puntos, ni directa ni con un transbordo. Prueba con otra parada cercana o consulta el mapa.');
         }
-        return { resultados, mensaje: null };
+        const criterio = hayOrigen && hayDestino
+            ? 'Ordenadas por tiempo; la primera es la que más te conviene.'
+            : (hayOrigen
+                ? 'Rutas que pasan por tu punto de partida (hacia su destino).'
+                : 'Rutas que llegan o pasan por tu destino.');
+        return { resultados, mensaje: null, criterio };
     }
 
     /** Líneas cuyas unidades activas son todas accesibles (y tienen al menos una). */
@@ -796,7 +820,11 @@ const MRServicios = (() => {
             return {
                 rutas: rutasPublicas(limpiar(p.q, 80), idDe(p.linea_id)).map((r) => ({
                     id: r.id, codigo: r.codigo, nombre: r.nombre, linea: r.linea, origen: r.origen, destino: r.destino,
-                    sentido: textoSentido(r.sentido), color: r.color, tarifa_texto: formatoTarifa(r.tarifa_gral ?? r.tarifa),
+                    sentido: textoSentido(r.sentido), color: r.color,
+                    tarifa_texto: formatoTarifa(r.tarifa_gral ?? r.tarifa),
+                    tarifa_edu_texto: formatoTarifa(r.tarifa_edu),
+                    tarifa_gral_texto: formatoTarifa(r.tarifa_gral ?? r.tarifa),
+                    tarifa_inapam_texto: formatoTarifa(r.tarifa_inapam),
                     total_paradas: r.total_paradas, estado_servicio: r.estado_servicio, estado_texto: estadoInfo(r.estado_servicio).texto,
                     aviso: r.aviso,
                 })),

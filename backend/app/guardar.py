@@ -127,6 +127,10 @@ def _usuarios(conn, nuevos, editados, actor, alcance, mapa):
             mapa[str(fila.get("id"))] = uid
         else:
             uid = str(fila.get("id"))
+            if actor["rol"] == "dueno":
+                ch = db.fetchone(conn, "SELECT linea_id FROM chofer WHERE usuario_id = %s", (uid,))
+                if not ch or (alcance is not None and ch["linea_id"] not in alcance):
+                    raise ErrorGuardar("Solo puedes editar choferes de tus líneas.", 403)
             if actor["rol"] == "admin" and uid == actor["id"] and (rol != "admin" or not activo):
                 raise ErrorGuardar("No puedes quitarte el rol de administrador ni desactivarte.")
             if password:
@@ -254,6 +258,11 @@ def _choferes(conn, nuevos, editados, actor, alcance, mapa_usuarios, mapa_lineas
                 (licencia, usuario_id, linea_id, telefono, seguro, activo),
             )
         else:
+            actual = db.fetchone(conn, "SELECT linea_id FROM chofer WHERE numero_licencia = %s", (licencia,))
+            if not actual:
+                raise ErrorGuardar("El chofer no existe.")
+            if alcance is not None and actual["linea_id"] not in alcance:
+                raise ErrorGuardar("No administras la línea de ese chofer.", 403)
             db.execute(
                 conn,
                 """UPDATE chofer SET linea_id=%s, telefono=%s, seguro_vida=%s, activo=%s WHERE numero_licencia=%s""",
@@ -297,7 +306,11 @@ def _vehiculos(conn, nuevos, editados, actor, alcance, mapa_lineas):
                 (placa,),
             )
             actual = db.fetchone(conn, "SELECT linea_id, activo FROM vehiculo WHERE placa = %s", (placa,))
-            if ocupado and actual and (str(actual["linea_id"]) != str(linea_id) or (actual["activo"] and not flags["activo"])):
+            if not actual:
+                raise ErrorGuardar("El vehículo no existe.")
+            if alcance is not None and actual["linea_id"] not in alcance:
+                raise ErrorGuardar("No administras la línea de ese vehículo.", 403)
+            if ocupado and (str(actual["linea_id"]) != str(linea_id) or (actual["activo"] and not flags["activo"])):
                 raise ErrorGuardar("No puedes cambiar de línea ni desactivar una unidad en viaje.")
         campos = (
             linea_id,
@@ -390,6 +403,11 @@ def _rutas(conn, nuevos, editados, actor, alcance, mapa_lineas, mapa_paradas, ma
             mapa_rutas[str(fila.get("id"))] = rid
         else:
             rid = str(fila["id"])
+            actual = db.fetchone(conn, "SELECT linea_id FROM ruta WHERE id = %s", (rid,))
+            if not actual:
+                raise ErrorGuardar("La ruta no existe.")
+            if alcance is not None and actual["linea_id"] not in alcance:
+                raise ErrorGuardar("No administras la línea de esa ruta.", 403)
             db.execute(
                 conn,
                 """UPDATE ruta SET linea_id=%s, codigo=%s, nombre=%s, origen=%s, destino=%s, sentido=%s, color=%s,

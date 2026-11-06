@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import time
+from collections import defaultdict
+from threading import Lock
 
 import bcrypt
 from fastapi import APIRouter, Request
@@ -10,6 +12,42 @@ from ..http_util import error, exigir_moviruta, ok
 from ..guardar import _hash
 
 router = APIRouter()
+
+# Bloqueo por email + IP (no por cookie): intentos fallidos recientes.
+_INTENTOS: dict[str, list[float]] = defaultdict(list)
+_LOCK = Lock()
+_MAX_FALLIDOS = 5
+_VENTANA_S = 300
+_BLOQUEO_S = 60
+
+
+def _clave_intento(email: str, request: Request) -> str:
+    ip = (request.client.host if request.client else "") or "0"
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if forwarded:
+        ip = forwarded
+    return f"{email}|{ip}"
+
+
+def _bloqueado(clave: str) -> int:
+    ahora = time.time()
+    with _LOCK:
+        marcas = [t for t in _INTENTOS[clave] if ahora - t < _VENTANA_S]
+        _INTENTOS[clave] = marcas
+        if len(marcas) >= _MAX_FALLIDOS:
+            espera = int(_BLOQUEO_S - (ahora - marcas[-1]))
+            return max(1, espera)
+    return 0
+
+
+def _registrar_fallo(clave: str) -> None:
+    with _LOCK:
+        _INTENTOS[clave].append(time.time())
+
+
+def _limpiar_fallos(clave: str) -> None:
+    with _LOCK:
+        _INTENTOS.pop(clave, None)
 
 
 @router.api_route("/sesion", methods=["GET", "POST"])
@@ -41,10 +79,8 @@ async def sesion(request: Request):
             return error("Acción no válida.")
     except db.ErrorBase as e:
         return error(e.mensaje, e.estado)
-    except Exception as e:  # noqa: BLE001
-        if db.es_duplicado(e):
-            return error("Ese correo ya está registrado.", 409)
-        return error(f"Error interno: {e}", 500)
+    except Exception:
+        return error("Error interno del servidor.", 500)
 
 
 def _entrar(conn, request, sid, datos, cuerpo):
@@ -52,11 +88,11 @@ def _entrar(conn, request, sid, datos, cuerpo):
 
     email = str(cuerpo.get("email") or "").strip().lower()
     password = str(cuerpo.get("password") or "")
-    control = datos.get("login") or {"intentos": 0, "hasta": 0}
-    ahora = int(time.time())
-    if int(control.get("hasta") or 0) > ahora:
+    clave = _clave_intento(email or "anon", request)
+    espera = _bloqueado(clave)
+    if espera:
         return error(
-            f"Demasiados intentos. Espera {int(control['hasta']) - ahora} segundos e intenta nuevamente.",
+            f"Demasiados intentos. Espera {espera} segundos e intenta nuevamente.",
             429,
         )
     u = db.fetchone(conn, "SELECT * FROM usuario WHERE email = %s", (email,))
@@ -67,23 +103,13 @@ def _entrar(conn, request, sid, datos, cuerpo):
         except ValueError:
             hash_ok = False
     if not u or not hash_ok:
-        control["intentos"] = int(control.get("intentos") or 0) + 1
-        if control["intentos"] >= 5:
-            control["hasta"] = ahora + 60
-            control["intentos"] = 0
-        datos["login"] = control
-        sid = sesion_store.regenerar(conn, datos) if False else sid
-        sesion_store.guardar(conn, sid, datos)
+        _registrar_fallo(clave)
+        # Regenerar id de sesión en fallo para no reutilizar el mismo sid
+        sid = sesion_store.regenerar(conn, {})
         return error("Correo o contraseña incorrectos.", 401)
     if not u["activo"]:
         return error("Tu cuenta está desactivada. Comunícate con el administrador.", 403)
-    if bcrypt.checkpw and password:
-        # rehash si hace falta (coste distinto)
-        try:
-            if not u["password_hash"].startswith("$2"):
-                pass
-        except Exception:
-            pass
+    _limpiar_fallos(clave)
     db.execute(conn, "UPDATE usuario SET ultimo_acceso = NOW() WHERE id = %s", (u["id"],))
     datos = {"usuario_id": u["id"]}
     sid = sesion_store.regenerar(conn, datos)

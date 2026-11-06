@@ -82,6 +82,23 @@ const MR = (() => {
         return `<div class="mr-vacio">${icono(nombreIcono)}<p>${esc(mensaje)}</p>${extra}</div>`;
     }
 
+    /** Tres tarifas (general / estudiantil / INAPAM) para listados y planificador. */
+    function htmlTarifas(ruta, opciones = {}) {
+        const gral = ruta.tarifa_gral_texto || ruta.tarifa_texto || '—';
+        const edu = ruta.tarifa_edu_texto || '—';
+        const ina = ruta.tarifa_inapam_texto || '—';
+        if (opciones.compacto) {
+            return `<span class="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-on-secondary-container" title="General / Estudiantil / INAPAM">
+                ${icono('payments', 'text-[18px]')}<span>Gral ${esc(gral)}</span><span class="text-outline">·</span><span>Est ${esc(edu)}</span><span class="text-outline">·</span><span>INAPAM ${esc(ina)}</span>
+            </span>`;
+        }
+        return `<div class="flex flex-wrap gap-1.5" title="Tarifas">
+            <span class="mr-etiqueta">${icono('payments')} Gral ${esc(gral)}</span>
+            <span class="mr-etiqueta">${icono('school')} Est ${esc(edu)}</span>
+            <span class="mr-etiqueta">${icono('elderly')} INAPAM ${esc(ina)}</span>
+        </div>`;
+    }
+
     function esqueletos(n = 3, alto = 'h-24') {
         return Array.from({ length: n }, () => `<div class="mr-esqueleto ${alto} w-full"></div>`).join('');
     }
@@ -91,43 +108,65 @@ const MR = (() => {
     const hayMapa = typeof L !== 'undefined';
     const ANIO = new Date().getFullYear();
 
+    const ATTR_CALLES = `&copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ${ANIO}`;
+    const ATTR_SAT = `Teselas &copy; Esri ${ANIO}`;
+    const PREVIEW_CALLES = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/12/1144/1796.png';
+    const PREVIEW_SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1796/1144';
+    const FALLBACK_CALLES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+    function capaCalles() {
+        if (typeof L.maplibreGL === 'function') {
+            try {
+                const capa = L.maplibreGL({
+                    style: 'https://tiles.openfreemap.org/styles/bright',
+                    interactive: false,
+                    attribution: ATTR_CALLES,
+                });
+                capa.options.nombre = 'Mapa';
+                capa.options.preview = PREVIEW_CALLES;
+                return capa;
+            } catch (e) { /* caer a raster */ }
+        }
+        const capa = L.tileLayer(FALLBACK_CALLES, {
+            subdomains: 'abcd', maxZoom: 20, attribution: ATTR_CALLES,
+            nombre: 'Mapa', plantilla: FALLBACK_CALLES, preview: PREVIEW_CALLES,
+        });
+        return capa;
+    }
+
+    function capaSatelite() {
+        const plantilla = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        return L.tileLayer(plantilla, {
+            maxZoom: 19, attribution: ATTR_SAT,
+            nombre: 'Satélite', plantilla, preview: PREVIEW_SAT,
+        });
+    }
+
     function crearMapa(id, opciones = {}) {
-        // Capas alineadas a OpenStreetMap: los recorridos se calculan con OSRM (misma red vial).
-        // Google tiles desplazan las calles y el trazo se ve "perdido" fuera de la vialidad.
-        const tipos = {
-            mapa: [
-                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                {
-                    subdomains: 'abcd',
-                    maxZoom: 20,
-                    attribution: `&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> ${ANIO}`,
-                },
-                'Mapa',
-            ],
-            satelite: [
-                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                {
-                    maxZoom: 19,
-                    attribution: `Teselas &copy; Esri ${ANIO}`,
-                },
-                'Satélite',
-            ],
-        };
-        const mapa = L.map(id, {
+        // Calles: OpenFreeMap Bright (look tipo Google, sin API key) vía MapLibre; satélite Esri.
+        // Recorridos OSRM siguen alineados a la red OSM.
+        const el = typeof id === 'string' ? document.getElementById(id) : id;
+        if (!el) throw new Error('No se encontró el contenedor del mapa.');
+        const mapa = L.map(el, {
             scrollWheelZoom: opciones.scrollWheelZoom ?? true,
             zoomControl: false,
         }).setView(opciones.centro || config.centro, opciones.zoom || config.zoom);
         mapa.attributionControl.setPrefix(false);
 
-        const capas = {};
-        Object.entries(tipos).forEach(([clave, [plantilla, ajustes, nombre]]) => {
-            capas[clave] = L.tileLayer(plantilla, { ...ajustes, nombre, plantilla });
-        });
+        const capas = { mapa: capaCalles(), satelite: capaSatelite() };
         capas.mapa.addTo(mapa);
         mapa.getContainer().classList.add('mr-mapa');
 
         L.control.zoom({ position: 'bottomright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(mapa);
         new (controlTipoMapa())(capas).addTo(mapa);
+
+        const refrescar = () => { try { mapa.invalidateSize({ animate: false }); } catch (e) { /* ignore */ } };
+        requestAnimationFrame(() => { refrescar(); setTimeout(refrescar, 200); setTimeout(refrescar, 800); });
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => refrescar());
+            ro.observe(mapa.getContainer());
+            mapa.on('unload', () => ro.disconnect());
+        }
         return mapa;
     }
 
@@ -164,12 +203,17 @@ const MR = (() => {
             },
             pintar() {
                 const capa = this.capas[this.otro()];
-                const z = Math.max(3, Math.min(Math.round(this.mapa.getZoom()) - 1, 18));
-                const t = this.mapa.project(this.mapa.getCenter(), z).divideBy(256).floor();
-                const urlMiniatura = L.Util.template(capa.options.plantilla, { s: String(Math.abs(t.x + t.y) % 4), x: t.x, y: t.y, z });
+                let urlMiniatura = capa.options.preview || PREVIEW_CALLES;
+                if (capa.options.plantilla) {
+                    try {
+                        const z = Math.max(3, Math.min(Math.round(this.mapa.getZoom()) - 1, 18));
+                        const t = this.mapa.project(this.mapa.getCenter(), z).divideBy(256).floor();
+                        urlMiniatura = L.Util.template(capa.options.plantilla, { s: String(Math.abs(t.x + t.y) % 4), x: t.x, y: t.y, z });
+                    } catch (e) { /* preview fija */ }
+                }
                 this.boton.style.backgroundImage = `url("${urlMiniatura}")`;
-                this.boton.querySelector('.mr-tipo-mapa-nombre').textContent = capa.options.nombre;
-                this.boton.title = `Mostrar ${capa.options.nombre.toLowerCase()}`;
+                this.boton.querySelector('.mr-tipo-mapa-nombre').textContent = capa.options.nombre || 'Mapa';
+                this.boton.title = `Mostrar ${(capa.options.nombre || 'mapa').toLowerCase()}`;
             },
         });
         return ClaseTipoMapa;
@@ -211,10 +255,60 @@ const MR = (() => {
                 ${extra}<br><a href="${url('parada.html?id=' + p.id)}">Ver rutas y llegadas →</a>`;
     }
 
+    /** Desplaza el polyline lateralmente (metros) para separar ida y vuelta. */
+    function offsetPolyline(puntos, metros) {
+        if (!metros || puntos.length < 2) return puntos;
+        const out = [];
+        for (let i = 0; i < puntos.length; i++) {
+            const prev = puntos[Math.max(0, i - 1)];
+            const next = puntos[Math.min(puntos.length - 1, i + 1)];
+            const lat = puntos[i][0];
+            const lng = puntos[i][1];
+            const dLat = (next[0] - prev[0]) * Math.PI / 180;
+            const dLng = (next[1] - prev[1]) * Math.PI / 180 * Math.cos(lat * Math.PI / 180);
+            const len = Math.hypot(dLat, dLng) || 1e-9;
+            const nx = -dLng / len;
+            const ny = dLat / len;
+            out.push([lat + (ny * metros) / 111320, lng + (nx * metros) / (111320 * Math.cos(lat * Math.PI / 180))]);
+        }
+        return out;
+    }
+
+    function flechasSentido(grupo, puntos, color) {
+        if (puntos.length < 2) return;
+        const paso = Math.max(1, Math.floor(puntos.length / 6));
+        for (let i = paso; i < puntos.length - 1; i += paso) {
+            const a = puntos[i - 1];
+            const b = puntos[i];
+            const ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+            L.marker(b, {
+                interactive: false,
+                keyboard: false,
+                icon: L.divIcon({
+                    className: 'mr-icono-limpio',
+                    html: `<div class="mr-flecha-sentido" style="--color:${esc(color)};--ang:${ang}deg"></div>`,
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7],
+                }),
+            }).addTo(grupo);
+        }
+    }
+
+    function metrosOffsetSentido(sentido) {
+        const s = String(sentido || '').toLowerCase();
+        if (s.includes('vuelta') || s === 'vuelta') return 10;
+        if (s.includes('ida') || s === 'ida') return -10;
+        return 0;
+    }
+
     /** Polilínea que se dibuja sola al aparecer, con un flujo animado encima. */
     function trazoAnimado(grupo, puntos, color, opciones = {}) {
+        const dash = opciones.dashArray || null;
         L.polyline(puntos, { color: '#000', weight: 9, opacity: 0.18, lineJoin: 'round', interactive: false }).addTo(grupo);
-        const linea = L.polyline(puntos, { color, weight: opciones.grosor || 6, opacity: 1, lineJoin: 'round', className: 'mr-trazo-animado' }).addTo(grupo);
+        const linea = L.polyline(puntos, {
+            color, weight: opciones.grosor || 6, opacity: 1, lineJoin: 'round',
+            dashArray: dash, className: 'mr-trazo-animado',
+        }).addTo(grupo);
         const elemento = linea.getElement && linea.getElement();
         if (elemento) elemento.setAttribute('pathLength', '1');
         if (opciones.flujo !== false) {
@@ -225,23 +319,28 @@ const MR = (() => {
 
     /**
      * Dibuja el trazado y las paradas de una ruta.
-     * opciones: { alSeleccionarParada(parada), destacadas: [ids], destino: id, ajustar: true, flujo: true }
+     * opciones: { alSeleccionarParada(parada), destacadas: [ids], destino: id, ajustar: true, flujo: true, offsetM }
      */
     function dibujarRuta(mapa, detalle, opciones = {}) {
         const color = detalle.ruta.color;
+        const sentido = detalle.ruta.sentido || '';
         const grupo = L.featureGroup().addTo(mapa);
         const marcadores = new Map();
         const destacadas = new Set(opciones.destacadas || []);
+        const offsetM = opciones.offsetM !== undefined ? opciones.offsetM : metrosOffsetSentido(sentido);
+        const esVuelta = String(sentido).toLowerCase().includes('vuelta');
 
         registrarRecorrido(detalle.ruta.id, detalle.recorrido);
         if (detalle.recorrido.length > 1) {
-            trazoAnimado(grupo, detalle.recorrido, color, opciones)
-                .bindTooltip(`Ruta ${esc(detalle.ruta.codigo)} · ${esc(detalle.ruta.nombre)}`, { sticky: true });
+            const puntos = offsetPolyline(detalle.recorrido, offsetM);
+            trazoAnimado(grupo, puntos, color, { ...opciones, dashArray: esVuelta ? '10 8' : null })
+                .bindTooltip(`Ruta ${esc(detalle.ruta.codigo)} · ${esc(sentido || 'Ida')} · ${esc(detalle.ruta.nombre)}`, { sticky: true });
+            flechasSentido(grupo, puntos, color);
         }
         detalle.paradas.forEach((p) => {
             const esDestino = opciones.destino === p.id;
-            const icono = esDestino ? iconoDestino() : iconoParada(color, destacadas.has(p.id));
-            const m = L.marker([p.latitud, p.longitud], { icon: icono, title: p.nombre, zIndexOffset: esDestino ? 500 : 0 })
+            const ico = esDestino ? iconoDestino() : iconoParada(color, destacadas.has(p.id));
+            const m = L.marker([p.latitud, p.longitud], { icon: ico, title: p.nombre, zIndexOffset: esDestino ? 500 : 0 })
                 .bindPopup(popupParada(p))
                 .addTo(grupo);
             if (opciones.alSeleccionarParada) m.on('click', () => opciones.alSeleccionarParada(p));
@@ -623,7 +722,7 @@ const MR = (() => {
 
     return {
         config, url, parametro, esc, icono, api, T, tiempoRelativo, estadoVehiculo, claseEstado, iconoEstado, insigniaRuta, insigniasRutas,
-        estadoHtml, avisoServicioHtml, htmlVacio, esqueletos, hayMapa,
+        estadoHtml, avisoServicioHtml, htmlVacio, htmlTarifas, esqueletos, hayMapa,
         crearMapa, iconoParada, iconoVehiculo, iconoDestino, dibujarRuta, trazoAnimado, capaVehiculos, mostrarUsuario, popupParada,
         ubicarUsuario, sondeo, htmlIndicador, indicador, htmlLlegadas,
     };

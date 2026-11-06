@@ -31,7 +31,13 @@
             ${MR.insigniaRuta(r)}
             <div class="min-w-0 flex-1">
                 <p class="font-semibold text-on-surface group-hover:text-primary">${esc(r.nombre)}</p>
-                <p class="text-xs text-on-surface-variant">${esc(T.textoSentido(r.sentido))} hacia ${esc(r.destino)} · ${esc(T.formatoTarifa(r.tarifa))}</p>
+                <p class="text-xs text-on-surface-variant">${esc(T.textoSentido(r.sentido))} hacia ${esc(r.destino)}</p>
+                <div class="mt-1">${MR.htmlTarifas({
+                    tarifa_texto: T.formatoTarifa(r.tarifa_gral ?? r.tarifa),
+                    tarifa_gral_texto: T.formatoTarifa(r.tarifa_gral ?? r.tarifa),
+                    tarifa_edu_texto: T.formatoTarifa(r.tarifa_edu),
+                    tarifa_inapam_texto: T.formatoTarifa(r.tarifa_inapam),
+                })}</div>
             </div>
             <span class="mr-estado ${MR.claseEstado(r.estado_servicio)}" title="${esc(T.estadoInfo(r.estado_servicio).texto)}">${icono(MR.iconoEstado(r.estado_servicio), 'relleno')}</span>
             ${icono('chevron_right', 'text-[20px] text-outline transition-transform group-hover:translate-x-1')}

@@ -147,6 +147,7 @@
     function htmlInsignias() {
         return `<div class="mb-2 flex flex-wrap items-center gap-2">
                 <span data-si-activa class="items-center gap-1 rounded-full bg-secondary-container px-2.5 py-0.5 text-label-sm font-label-sm uppercase text-on-secondary-container">${icono('check', 'text-[14px]')} Ruta seleccionada</span>
+                <button type="button" data-desmarcar class="hidden items-center gap-1 rounded-full bg-surface-container px-2.5 py-0.5 text-label-sm font-label-sm uppercase text-on-surface-variant hover:bg-error-container hover:text-error">${icono('close', 'text-[14px]')} Quitar selección</button>
                 ${modoBusqueda ? '<span data-si-inactiva class="inline-flex rounded-full bg-surface-container px-2.5 py-0.5 text-label-sm font-label-sm uppercase text-on-surface-variant">Alternativa</span>' : ''}
             </div>`;
     }
@@ -172,7 +173,8 @@
                         <p class="text-sm font-semibold text-on-surface">${esc(ruta.linea)} · Ruta ${esc(ruta.codigo)}</p>
                         <span class="shrink-0 rounded-md bg-secondary-container/40 px-1.5 py-0.5 text-[11px] font-bold text-on-secondary-container">${esc(sinAprox(tiempo))}</span>
                     </div>
-                    <p class="mt-0.5 text-sm text-on-surface-variant">${esTransbordo ? 'Toma la ruta en' : 'Sube en'} <strong class="text-on-surface">${esc(subir.nombre)}</strong> · ${esc(precio(ruta.tarifa_texto))}</p>
+                    <p class="mt-0.5 text-sm text-on-surface-variant">${esTransbordo ? 'Toma la ruta en' : 'Sube en'} <strong class="text-on-surface">${esc(subir.nombre)}</strong></p>
+                    <div class="mt-1">${MR.htmlTarifas(ruta)}</div>
                     <p class="mt-2 flex items-start gap-1.5 rounded-lg bg-surface-container-low px-2.5 py-1.5 text-xs text-on-surface-variant">${info}</p>
                 </div>
             </div>`;
@@ -198,7 +200,7 @@
                         ${MR.insigniaRuta(r, 'lg')}
                     </div>
                     <div class="mt-4 flex flex-wrap items-center gap-2">
-                        <span class="inline-flex items-center gap-1.5 rounded-lg bg-secondary-container/40 px-3 py-1.5 text-sm font-bold text-on-secondary-container">${icono('payments', 'text-[18px]')} ${esc(precio(r.tarifa_texto))}</span>
+                        <span class="inline-flex items-center gap-1.5 rounded-lg bg-secondary-container/40 px-3 py-1.5">${MR.htmlTarifas(r, { compacto: true })}</span>
                         <span class="mr-etiqueta">${icono('signpost')} ${plural(r.total_paradas, 'parada', 'paradas')}</span>
                         ${MR.estadoHtml(r.estado_servicio, r.estado_texto)}
                     </div>
@@ -224,12 +226,16 @@
         const intermedias = r.tramos.reduce((n, t) => n + t.paradas_intermedias, 0);
         const avisos = r.tramos.filter((t) => t.ruta.estado_servicio !== 'normal');
         const tramos = r.tramos.map((t) => ({ ruta: t.ruta.id, subir: t.subir.id, bajar: t.bajar.id }));
+        const badgeMejor = r.mejor
+            ? `<span class="mb-2 inline-flex items-center gap-1 rounded-full bg-tertiary-container px-2.5 py-0.5 text-label-sm font-label-sm uppercase text-on-tertiary-container">${icono('star', 'relleno text-[14px]')} Te conviene más</span>`
+            : '';
         return `
-            <article class="mr-ruta-tarjeta mr-tarjeta cursor-pointer overflow-hidden" style="--i:${i}" role="button" tabindex="0" data-tipo="${r.tipo}" data-tramos='${JSON.stringify(tramos)}' data-minutos="${r.minutos_total}">
+            <article class="mr-ruta-tarjeta mr-tarjeta cursor-pointer overflow-hidden${r.mejor ? ' ring-2 ring-tertiary/40' : ''}" style="--i:${i}" role="button" tabindex="0" data-tipo="${r.tipo}" data-tramos='${JSON.stringify(tramos)}' data-minutos="${r.minutos_total}" aria-pressed="false">
                 <div class="mr-ruta-barra"></div>
                 <div class="p-5">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
+                            ${badgeMejor}
                             ${htmlInsignias()}
                             <h3 class="font-headline-sm text-headline-sm text-primary">${esc(primero.ruta.linea)}</h3>
                             <p class="mt-1 flex items-center gap-1.5 text-sm text-on-surface-variant">${icono('trip_origin', 'text-[16px] text-secondary')}<span><strong class="font-semibold text-on-surface">Origen:</strong> ${esc(primero.subir.nombre)}</span></p>
@@ -240,7 +246,12 @@
                         </div>
                     </div>
                     <div class="mt-4 flex flex-wrap items-center gap-2">
-                        <span class="inline-flex items-center gap-1.5 rounded-lg bg-secondary-container/40 px-3 py-1.5 text-sm font-bold text-on-secondary-container">${icono('payments', 'text-[18px]')} ${esc(precio(r.tarifa_total_texto))}</span>
+                        <span class="inline-flex items-center gap-1.5 rounded-lg bg-secondary-container/40 px-3 py-1.5">${MR.htmlTarifas({
+                            tarifa_texto: r.tarifa_total_texto,
+                            tarifa_gral_texto: r.tarifa_gral_texto || r.tarifa_total_texto,
+                            tarifa_edu_texto: r.tarifa_edu_texto,
+                            tarifa_inapam_texto: r.tarifa_inapam_texto,
+                        }, { compacto: true })}</span>
                         <span class="mr-etiqueta">${icono(r.transbordos ? 'sync_alt' : 'arrow_forward')} ${r.transbordos ? plural(r.transbordos, 'transbordo', 'transbordos') : 'Sin transbordos'}</span>
                         <span class="mr-etiqueta">${icono(r.caminar_texto ? 'directions_walk' : 'signpost')} ${r.caminar_texto ? esc(r.caminar_texto) : plural(intermedias, 'parada intermedia', 'paradas intermedias')}</span>
                         <span class="mr-etiqueta" data-llegada>${icono('schedule')} Llegas aprox. ${esc(horaLlegada(r.minutos_total))}</span>
@@ -335,7 +346,7 @@
         }
     }
 
-    function mostrarResultados({ resultados, mensaje: aviso }) {
+    function mostrarResultados({ resultados, mensaje: aviso, criterio }) {
         modoBusqueda = true;
         const n = resultados.length;
         titulo.textContent = n ? `Rutas encontradas (${plural(n, 'alternativa', 'alternativas')})` : 'Sin resultados';
@@ -345,18 +356,51 @@
                 `<button type="button" class="mr-btn mr-btn-contorno mr-btn-sm mt-2" data-todas>${icono('list')} Mostrar todas las rutas</button>`)}</div>`;
             return;
         }
+        const nota = criterio || resultados[0]?.criterio_mejor || '';
+        if (nota) avisar(`${icono('tips_and_updates', 'text-[16px]')} ${esc(nota)}`, 'text-on-surface-variant flex items-center gap-1.5');
         contenedor.innerHTML = resultados.map(htmlTarjetaOpcion).join('');
         aplicarFiltro();
         activarTarjeta(tarjetas().find((t) => !t.classList.contains('hidden')) || tarjetas()[0]);
         if (window.matchMedia('(max-width: 1023.98px)').matches) contenedor.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    function desmarcarSeleccion() {
+        if (sondeoVehiculos) sondeoVehiculos.detener();
+        if (sondeoEta) sondeoEta.detener();
+        dibujos.forEach((d) => d.quitar());
+        dibujos = [];
+        capaVehiculos.actualizar([]);
+        if (flota.siguiendo) alternarSeguir(false);
+        panel.classList.add('hidden');
+        tarjetaUnidad.classList.add('hidden');
+        btnVistaRuta.disabled = true;
+        seleccion = null;
+        tarjetas().forEach((t) => {
+            t.classList.remove('activo');
+            t.setAttribute('aria-pressed', 'false');
+            const btn = t.querySelector('[data-desmarcar]');
+            if (btn) { btn.classList.add('hidden'); btn.classList.remove('inline-flex'); }
+        });
+        vistaParadas();
+        indicador.reposo(TEXTO_REPOSO);
+    }
+
     /* ---------- Selección de una opción ---------- */
     async function activarTarjeta(tarjeta) {
         if (!tarjeta) return;
+        if (seleccion && seleccion.tarjeta === tarjeta) {
+            desmarcarSeleccion();
+            return;
+        }
         tarjetas().forEach((t) => {
-            t.classList.toggle('activo', t === tarjeta);
-            t.setAttribute('aria-pressed', String(t === tarjeta));
+            const activa = t === tarjeta;
+            t.classList.toggle('activo', activa);
+            t.setAttribute('aria-pressed', String(activa));
+            const btn = t.querySelector('[data-desmarcar]');
+            if (btn) {
+                btn.classList.toggle('hidden', !activa);
+                btn.classList.toggle('inline-flex', activa);
+            }
         });
         const tramos = JSON.parse(tarjeta.dataset.tramos);
         const rutas = tramos.map((t) => t.ruta);
@@ -663,7 +707,7 @@
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:3mm">
                         <span style="background:${esc(d.ruta.color)};color:#fff;font-weight:800;border-radius:6px;padding:4px 10px;font-size:16px">${esc(d.ruta.codigo)}</span>
                         <div><strong style="font-size:16px">${esc(d.ruta.nombre)}</strong> <span style="color:#3f4944">(${esc(d.ruta.sentido)})</span>
-                        <div style="font-size:12px;color:#3f4944">${esc(d.ruta.linea)} · ${esc(d.ruta.origen)} → ${esc(d.ruta.destino)} · Tarifa ${esc(d.ruta.tarifa_texto)} · ${esc(d.ruta.longitud_texto)} · ${esc(d.ruta.duracion_texto)}</div></div>
+                        <div style="font-size:12px;color:#3f4944">${esc(d.ruta.linea)} · ${esc(d.ruta.origen)} → ${esc(d.ruta.destino)} · Gral ${esc(d.ruta.tarifa_gral_texto || d.ruta.tarifa_texto)} · Est ${esc(d.ruta.tarifa_edu_texto || '—')} · INAPAM ${esc(d.ruta.tarifa_inapam_texto || '—')} · ${esc(d.ruta.longitud_texto)} · ${esc(d.ruta.duracion_texto)}</div></div>
                     </div>
                     ${d.ruta.aviso ? `<p style="font-size:12px;background:#fef3c7;color:#92400e;padding:6px 10px;border-radius:6px;margin-bottom:3mm">Aviso: ${esc(d.ruta.aviso)}</p>` : ''}
                     <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -722,9 +766,14 @@
     mapa.on('dragstart', () => { if (flota.siguiendo) alternarSeguir(false); });
     contenedor.addEventListener('click', (e) => {
         if (e.target.closest('[data-todas]')) { volverATodas(); return; }
+        if (e.target.closest('[data-desmarcar]')) {
+            e.preventDefault();
+            desmarcarSeleccion();
+            return;
+        }
         if (e.target.closest('a, button')) return;
         const tarjeta = e.target.closest('.mr-ruta-tarjeta');
-        if (tarjeta && !tarjeta.classList.contains('activo')) activarTarjeta(tarjeta);
+        if (tarjeta) activarTarjeta(tarjeta);
     });
     contenedor.addEventListener('keydown', (e) => {
         if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('mr-ruta-tarjeta')) {

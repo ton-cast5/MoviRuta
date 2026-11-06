@@ -70,6 +70,7 @@ def fijar_cookie(response: Response, request: Request, sid: str) -> None:
         samesite="lax",
         secure=https,
         path="/",
+        max_age=DURACION,
     )
 
 

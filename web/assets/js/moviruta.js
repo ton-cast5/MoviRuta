@@ -135,11 +135,20 @@ const MR = (() => {
     }
 
     function capaSatelite() {
+        // Híbrido tipo Google: imagen Esri + vías + nombres de lugares/ciudades.
         const plantilla = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-        return L.tileLayer(plantilla, {
-            maxZoom: 19, attribution: ATTR_SAT,
-            nombre: 'Satélite', plantilla, preview: PREVIEW_SAT,
-        });
+        const imagen = L.tileLayer(plantilla, { maxZoom: 19, attribution: ATTR_SAT });
+        const vias = L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+            { maxZoom: 19, opacity: 0.95, attribution: '' },
+        );
+        const lugares = L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+            { maxZoom: 19, attribution: '' },
+        );
+        const grupo = L.layerGroup([imagen, vias, lugares]);
+        grupo.options = { nombre: 'Satélite', plantilla, preview: PREVIEW_SAT };
+        return grupo;
     }
 
     function crearMapa(id, opciones = {}) {
@@ -197,7 +206,8 @@ const MR = (() => {
             alternar() {
                 const siguiente = this.otro();
                 this.mapa.removeLayer(this.capas[this.actual]);
-                this.capas[siguiente].addTo(this.mapa).bringToBack();
+                const capa = this.capas[siguiente].addTo(this.mapa);
+                if (typeof capa.bringToBack === 'function') capa.bringToBack();
                 this.actual = siguiente;
                 this.pintar();
             },

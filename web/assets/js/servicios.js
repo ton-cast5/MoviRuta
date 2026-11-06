@@ -1436,6 +1436,24 @@ const MRServicios = (() => {
 
     return {
         ROLES, PANELES,
+        configPublica() {
+            if (this._cfgPublica) return this._cfgPublica;
+            if (!modoServidor) {
+                const meta = document.querySelector('meta[name="google-maps-key"]');
+                this._cfgPublica = {
+                    ok: true,
+                    google_maps_api_key: (meta && meta.content) || '',
+                    mapas: 'osm',
+                };
+                return this._cfgPublica;
+            }
+            try {
+                this._cfgPublica = pedir('config');
+            } catch (e) {
+                this._cfgPublica = { ok: false, google_maps_api_key: '', mapas: 'osm' };
+            }
+            return this._cfgPublica;
+        },
         api, reiniciarDemo, modoServidor, avisoServidor, catalogos,
         texto: { norm, textoSentido, estadoInfo, formatoTarifa, formatoDistancia, formatoMinutosAprox, formatoFecha, formatoHora, hora24, formatoDuracion, fechaISO },
         consulta: { rutasPublicas, rutaPublica, paradasPublicas, paradaPublica, rutasDeParada, porParadas, frecuentes, conAvisos, detalleRuta, lineasTotalmenteAccesibles, telefonosLineas },

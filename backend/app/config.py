@@ -71,6 +71,10 @@ def cargar() -> dict:
         "respaldo": respaldo,
         "cookie": "moviruta",
         "sesion_segundos": 8 * 3600,
+        "google_maps_api_key": _env(
+            "GOOGLE_MAPS_API_KEY",
+            str(local.get("google_maps_api_key") or ""),
+        ),
     }
 
 

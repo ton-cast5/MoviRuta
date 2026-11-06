@@ -674,18 +674,8 @@
             puntos = [];
             pintarTrazado();
         });
-        async function tramoOsrm(a, b) {
-            const url = `https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`;
-            const r = await fetch(url);
-            if (!r.ok) throw new Error('No se pudo calcular el tramo.');
-            const data = await r.json();
-            if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) {
-                throw new Error('No hay vialidad entre esas paradas.');
-            }
-            const pts = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-            pts[0] = [a[0], a[1]];
-            pts[pts.length - 1] = [b[0], b[1]];
-            return pts;
+        async function tramoCalle(a, b) {
+            return MR.trazarCalle(a, b);
         }
 
         document.getElementById('btnDesdeParadas').addEventListener('click', async () => {
@@ -707,7 +697,7 @@
                 if (form.sentido.value === 'circular') coords.push(coords[0].slice());
                 const nuevo = [];
                 for (let i = 0; i < coords.length - 1; i += 1) {
-                    const seg = await tramoOsrm(coords[i], coords[i + 1]);
+                    const seg = await tramoCalle(coords[i], coords[i + 1]);
                     if (nuevo.length) seg.shift();
                     nuevo.push(...seg);
                 }

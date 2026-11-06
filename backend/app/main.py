@@ -15,7 +15,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from backend.app.routers import bd, guardar, sesion  # noqa: E402
+from backend.app.routers import bd, config_pub, guardar, sesion  # noqa: E402
 
 app = FastAPI(title="MoviRuta API", docs_url=None, redoc_url=None)
 
@@ -48,6 +48,7 @@ async def _error_generico(_request: Request, exc: Exception):
     return JSONResponse({"ok": False, "mensaje": "Error interno del servidor."}, status_code=500)
 
 app.include_router(bd.router, prefix="/api")
+app.include_router(config_pub.router, prefix="/api")
 app.include_router(sesion.router, prefix="/api")
 app.include_router(guardar.router, prefix="/api")
 

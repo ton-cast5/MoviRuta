@@ -108,13 +108,73 @@ const MR = (() => {
     const hayMapa = typeof L !== 'undefined';
     const ANIO = new Date().getFullYear();
 
-    const ATTR_CALLES = `&copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ${ANIO}`;
+    const ATTR_GOOGLE = `&copy; <a href="https://maps.google.com" target="_blank" rel="noopener">Google</a> ${ANIO}`;
+    const ATTR_CALLES = `&copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ${ANIO}`;
     const ATTR_SAT = `Teselas &copy; Esri ${ANIO}`;
     const PREVIEW_CALLES = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/12/1144/1796.png';
     const PREVIEW_SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1796/1144';
     const FALLBACK_CALLES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
-    function capaCalles() {
+    config.googleMaps = false;
+    config.googleMapsKey = '';
+
+    function cargarScript(src) {
+        return new Promise((resolver, rechazar) => {
+            if ([...document.scripts].some((s) => s.src === src)) {
+                resolver();
+                return;
+            }
+            const s = document.createElement('script');
+            s.src = src;
+            s.async = true;
+            s.onload = () => resolver();
+            s.onerror = () => rechazar(new Error(`No se pudo cargar ${src}`));
+            document.head.appendChild(s);
+        });
+    }
+
+    let _googleListo = null;
+    function asegurarGoogleMaps(clave) {
+        if (!clave) return Promise.resolve(false);
+        if (window.google?.maps && L.gridLayer?.googleMutant) return Promise.resolve(true);
+        if (_googleListo) return _googleListo;
+        _googleListo = (async () => {
+            if (!window.google?.maps) {
+                await new Promise((resolver, rechazar) => {
+                    const cb = `__mrGoogleMapsCb_${Date.now()}`;
+                    window[cb] = () => { delete window[cb]; resolver(); };
+                    const s = document.createElement('script');
+                    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(clave)}&v=weekly&callback=${cb}`;
+                    s.async = true;
+                    s.defer = true;
+                    s.onerror = () => rechazar(new Error('No se pudo cargar Google Maps'));
+                    document.head.appendChild(s);
+                });
+            }
+            if (!L.gridLayer?.googleMutant) {
+                await cargarScript('https://unpkg.com/leaflet.gridlayer.googlemutant@0.14.1/dist/Leaflet.GoogleMutant.js');
+            }
+            return !!(window.google?.maps && L.gridLayer?.googleMutant);
+        })().catch((e) => {
+            console.warn('[MoviRuta] Google Maps:', e);
+            _googleListo = null;
+            return false;
+        });
+        return _googleListo;
+    }
+
+    function capaGoogle(tipo, nombre) {
+        const capa = L.gridLayer.googleMutant({
+            type: tipo,
+            maxZoom: 21,
+            attribution: ATTR_GOOGLE,
+        });
+        capa.options.nombre = nombre;
+        capa.options.preview = tipo === 'hybrid' ? PREVIEW_SAT : PREVIEW_CALLES;
+        return capa;
+    }
+
+    function capaCallesOsm() {
         if (typeof L.maplibreGL === 'function') {
             try {
                 const capa = L.maplibreGL({
@@ -127,119 +187,86 @@ const MR = (() => {
                 return capa;
             } catch (e) { /* caer a raster */ }
         }
-        const capa = L.tileLayer(FALLBACK_CALLES, {
+        return L.tileLayer(FALLBACK_CALLES, {
             subdomains: 'abcd', maxZoom: 20, attribution: ATTR_CALLES,
             nombre: 'Mapa', plantilla: FALLBACK_CALLES, preview: PREVIEW_CALLES,
         });
-        return capa;
     }
 
-    const ESTILO_BRIGHT_URL = 'https://tiles.openfreemap.org/styles/bright';
-    let _promesaEstiloBright = null;
-    function cargarEstiloBright() {
-        if (!_promesaEstiloBright) {
-            _promesaEstiloBright = fetch(ESTILO_BRIGHT_URL)
-                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('No se pudo cargar el estilo Bright'))))
-                .catch((e) => { _promesaEstiloBright = null; throw e; });
-        }
-        return _promesaEstiloBright;
-    }
-    if (hayMapa) cargarEstiloBright().catch(() => {});
-
-    /**
-     * Bright completo (mismas etiquetas que el mapa normal) con suelo/agua ocultos
-     * para dejar ver la imagen satélite debajo.
-     */
-    function estiloBrightSobreSatelite(estilo) {
-        const copia = JSON.parse(JSON.stringify(estilo));
-        copia.layers = (copia.layers || []).map((layer) => {
-            const l = {
-                ...layer,
-                paint: { ...(layer.paint || {}) },
-                layout: { ...(layer.layout || {}) },
-            };
-            const clave = `${l.id || ''} ${l['source-layer'] || ''}`;
-            if (l.type === 'background') {
-                l.paint['background-color'] = 'rgba(0,0,0,0)';
-                l.paint['background-opacity'] = 0;
-                return l;
-            }
-            if (l.type === 'fill' || l.type === 'fill-extrusion' || l.type === 'raster'
-                || l.type === 'heatmap' || l.type === 'hillshade') {
-                l.layout.visibility = 'none';
-                return l;
-            }
-            if (l.type === 'line') {
-                // Oculta contornos de tierra/agua; deja la red vial como en Bright.
-                if (/water|landcover|landuse|boundary|building|land|ocean/i.test(clave)
-                    && !/road|bridge|tunnel|street|motorway|path|rail|transit|transport|highway/i.test(clave)) {
-                    l.layout.visibility = 'none';
-                }
-                return l;
-            }
-            if (l.type === 'symbol') {
-                // Todas las etiquetas Bright (lugares, calles, POI); halo extra para satélite.
-                const halo = Number(l.paint['text-halo-width']);
-                l.paint['text-halo-width'] = Number.isFinite(halo) ? Math.max(halo, 1.4) : 1.4;
-                if (l.paint['text-halo-color'] == null) l.paint['text-halo-color'] = '#ffffff';
-                return l;
-            }
-            return l;
-        });
-        return copia;
-    }
-
-    function capaSatelite() {
-        // Imagen Esri + etiquetas idénticas al mapa normal (OpenFreeMap Bright).
+    function capaSateliteOsm() {
         const plantilla = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
         const imagen = L.tileLayer(plantilla, { maxZoom: 19, attribution: ATTR_SAT });
-        const labelsRespaldo = L.layerGroup([
-            L.tileLayer(
-                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
-                { subdomains: 'abcd', maxZoom: 20, attribution: ATTR_CALLES },
-            ),
-            L.tileLayer(
-                'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-                { maxZoom: 19, attribution: '' },
-            ),
-        ]);
-        const grupo = L.layerGroup([imagen, labelsRespaldo]);
+        const labels = L.tileLayer(
+            'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+            { subdomains: 'abcd', maxZoom: 20, attribution: ATTR_CALLES },
+        );
+        const grupo = L.layerGroup([imagen, labels]);
         grupo.options = { nombre: 'Satélite', plantilla, preview: PREVIEW_SAT };
-
-        if (typeof L.maplibreGL === 'function') {
-            cargarEstiloBright()
-                .then((estilo) => {
-                    const etiquetas = L.maplibreGL({
-                        style: estiloBrightSobreSatelite(estilo),
-                        interactive: false,
-                        attribution: ATTR_CALLES,
-                    });
-                    const quitarRespaldo = () => {
-                        if (grupo.hasLayer(labelsRespaldo)) grupo.removeLayer(labelsRespaldo);
-                    };
-                    etiquetas.on('add', () => {
-                        const gl = typeof etiquetas.getMaplibreMap === 'function'
-                            ? etiquetas.getMaplibreMap()
-                            : etiquetas._glMap;
-                        if (!gl) {
-                            setTimeout(quitarRespaldo, 800);
-                            return;
-                        }
-                        const listo = () => quitarRespaldo();
-                        if (gl.loaded()) listo();
-                        else gl.once('load', listo);
-                        gl.once('idle', listo);
-                    });
-                    grupo.addLayer(etiquetas);
-                })
-                .catch(() => { /* respaldo raster ya visible */ });
-        }
         return grupo;
     }
 
+    async function activarCapasGoogle(mapa, capas, control) {
+        let clave = '';
+        try {
+            const cfg = MRServicios.configPublica();
+            clave = (cfg && cfg.google_maps_api_key) || '';
+        } catch (e) { /* sin config */ }
+        if (!clave) return false;
+        const ok = await asegurarGoogleMaps(clave);
+        if (!ok || !mapa._loaded) return false;
+        config.googleMaps = true;
+        config.googleMapsKey = clave;
+        const actual = control.actual || 'mapa';
+        try { mapa.removeLayer(capas[actual]); } catch (e) { /* ignore */ }
+        capas.mapa = capaGoogle('roadmap', 'Mapa');
+        capas.satelite = capaGoogle('hybrid', 'Satélite');
+        capas[actual].addTo(mapa);
+        if (typeof capas[actual].bringToBack === 'function') capas[actual].bringToBack();
+        control.pintar();
+        try { mapa.invalidateSize({ animate: false }); } catch (e) { /* ignore */ }
+        return true;
+    }
+
+    /** Trazo por calles: Google Directions si hay Maps; si no, OSRM. */
+    async function trazarCalle(a, b) {
+        if (config.googleMaps && window.google?.maps?.DirectionsService) {
+            const svc = new google.maps.DirectionsService();
+            const res = await new Promise((resolver, rechazar) => {
+                svc.route(
+                    {
+                        origin: { lat: a[0], lng: a[1] },
+                        destination: { lat: b[0], lng: b[1] },
+                        travelMode: google.maps.TravelMode.DRIVING,
+                    },
+                    (resultado, estado) => {
+                        if (estado === 'OK' && resultado?.routes?.[0]) resolver(resultado);
+                        else rechazar(new Error(estado === 'ZERO_RESULTS' ? 'No hay vialidad entre esas paradas.' : 'No se pudo calcular el tramo con Google.'));
+                    },
+                );
+            });
+            const path = res.routes[0].overview_path || [];
+            const pts = path.map((p) => [p.lat(), p.lng()]);
+            if (pts.length) {
+                pts[0] = [a[0], a[1]];
+                pts[pts.length - 1] = [b[0], b[1]];
+            }
+            return pts;
+        }
+        const url = `https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('No se pudo calcular el tramo.');
+        const data = await r.json();
+        if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) {
+            throw new Error('No hay vialidad entre esas paradas.');
+        }
+        const pts = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        pts[0] = [a[0], a[1]];
+        pts[pts.length - 1] = [b[0], b[1]];
+        return pts;
+    }
+
     function crearMapa(id, opciones = {}) {
-        // Calles: OpenFreeMap Bright (look tipo Google, sin API key) vía MapLibre; satélite Esri.
-        // Recorridos OSRM siguen alineados a la red OSM.
+        // Preferencia: Google Maps (roadmap + hybrid). Respaldo: OpenFreeMap / Esri.
         const el = typeof id === 'string' ? document.getElementById(id) : id;
         if (!el) throw new Error('No se encontró el contenedor del mapa.');
         const mapa = L.map(el, {
@@ -248,12 +275,14 @@ const MR = (() => {
         }).setView(opciones.centro || config.centro, opciones.zoom || config.zoom);
         mapa.attributionControl.setPrefix(false);
 
-        const capas = { mapa: capaCalles(), satelite: capaSatelite() };
+        const capas = { mapa: capaCallesOsm(), satelite: capaSateliteOsm() };
         capas.mapa.addTo(mapa);
         mapa.getContainer().classList.add('mr-mapa');
 
         L.control.zoom({ position: 'bottomright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(mapa);
-        new (controlTipoMapa())(capas).addTo(mapa);
+        const control = new (controlTipoMapa())(capas).addTo(mapa);
+
+        activarCapasGoogle(mapa, capas, control);
 
         const refrescar = () => { try { mapa.invalidateSize({ animate: false }); } catch (e) { /* ignore */ } };
         requestAnimationFrame(() => { refrescar(); setTimeout(refrescar, 200); setTimeout(refrescar, 800); });
@@ -819,7 +848,7 @@ const MR = (() => {
     return {
         config, url, parametro, esc, icono, api, T, tiempoRelativo, estadoVehiculo, claseEstado, iconoEstado, insigniaRuta, insigniasRutas,
         estadoHtml, avisoServicioHtml, htmlVacio, htmlTarifas, esqueletos, hayMapa,
-        crearMapa, iconoParada, iconoVehiculo, iconoDestino, dibujarRuta, trazoAnimado, capaVehiculos, mostrarUsuario, popupParada,
+        crearMapa, trazarCalle, iconoParada, iconoVehiculo, iconoDestino, dibujarRuta, trazoAnimado, capaVehiculos, mostrarUsuario, popupParada,
         ubicarUsuario, sondeo, htmlIndicador, indicador, htmlLlegadas,
     };
 })();

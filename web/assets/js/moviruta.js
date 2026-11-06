@@ -134,32 +134,55 @@ const MR = (() => {
         return capa;
     }
 
-    /** Estilo Bright solo con etiquetas (y calles finas), legible sobre imagen satélite. */
-    function estiloEtiquetasSobreSatelite(estilo) {
+    const ESTILO_BRIGHT_URL = 'https://tiles.openfreemap.org/styles/bright';
+    let _promesaEstiloBright = null;
+    function cargarEstiloBright() {
+        if (!_promesaEstiloBright) {
+            _promesaEstiloBright = fetch(ESTILO_BRIGHT_URL)
+                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('No se pudo cargar el estilo Bright'))))
+                .catch((e) => { _promesaEstiloBright = null; throw e; });
+        }
+        return _promesaEstiloBright;
+    }
+    if (hayMapa) cargarEstiloBright().catch(() => {});
+
+    /**
+     * Bright completo (mismas etiquetas que el mapa normal) con suelo/agua ocultos
+     * para dejar ver la imagen satélite debajo.
+     */
+    function estiloBrightSobreSatelite(estilo) {
         const copia = JSON.parse(JSON.stringify(estilo));
-        const esCalle = (l) => {
-            const id = `${l.id || ''} ${l['source-layer'] || ''}`;
-            return l.type === 'line' && /road|bridge|tunnel|highway|transport|street/i.test(id);
-        };
-        copia.layers = (copia.layers || []).filter((l) => l.type === 'background' || l.type === 'symbol' || esCalle(l));
-        copia.layers = copia.layers.map((l) => {
+        copia.layers = (copia.layers || []).map((layer) => {
+            const l = {
+                ...layer,
+                paint: { ...(layer.paint || {}) },
+                layout: { ...(layer.layout || {}) },
+            };
+            const clave = `${l.id || ''} ${l['source-layer'] || ''}`;
             if (l.type === 'background') {
-                return { ...l, paint: { 'background-color': 'rgba(0,0,0,0)', 'background-opacity': 0 } };
+                l.paint['background-color'] = 'rgba(0,0,0,0)';
+                l.paint['background-opacity'] = 0;
+                return l;
+            }
+            if (l.type === 'fill' || l.type === 'fill-extrusion' || l.type === 'raster'
+                || l.type === 'heatmap' || l.type === 'hillshade') {
+                l.layout.visibility = 'none';
+                return l;
             }
             if (l.type === 'line') {
-                const paint = { ...(l.paint || {}) };
-                paint['line-color'] = '#ffffff';
-                paint['line-opacity'] = Math.min(0.5, paint['line-opacity'] == null ? 0.5 : Number(paint['line-opacity']));
-                return { ...l, paint };
+                // Oculta contornos de tierra/agua; deja la red vial como en Bright.
+                if (/water|landcover|landuse|boundary|building|land|ocean/i.test(clave)
+                    && !/road|bridge|tunnel|street|motorway|path|rail|transit|transport|highway/i.test(clave)) {
+                    l.layout.visibility = 'none';
+                }
+                return l;
             }
             if (l.type === 'symbol') {
-                const paint = { ...(l.paint || {}) };
-                // Mismas etiquetas Bright, contraste para satélite (texto claro + halo).
-                paint['text-color'] = '#ffffff';
-                paint['text-halo-color'] = 'rgba(0,0,0,0.92)';
-                paint['text-halo-width'] = Math.max(1.8, Number(paint['text-halo-width']) || 0);
-                paint['text-halo-blur'] = 0.4;
-                return { ...l, paint };
+                // Todas las etiquetas Bright (lugares, calles, POI); halo extra para satélite.
+                const halo = Number(l.paint['text-halo-width']);
+                l.paint['text-halo-width'] = Number.isFinite(halo) ? Math.max(halo, 1.4) : 1.4;
+                if (l.paint['text-halo-color'] == null) l.paint['text-halo-color'] = '#ffffff';
+                return l;
             }
             return l;
         });
@@ -167,29 +190,49 @@ const MR = (() => {
     }
 
     function capaSatelite() {
-        // Imagen Esri + las mismas etiquetas OpenFreeMap Bright del mapa normal.
+        // Imagen Esri + etiquetas idénticas al mapa normal (OpenFreeMap Bright).
         const plantilla = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
         const imagen = L.tileLayer(plantilla, { maxZoom: 19, attribution: ATTR_SAT });
-        const labelsRaster = L.tileLayer(
-            'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
-            { subdomains: 'abcd', maxZoom: 20, opacity: 1, attribution: ATTR_CALLES },
-        );
-        const grupo = L.layerGroup([imagen, labelsRaster]);
+        const labelsRespaldo = L.layerGroup([
+            L.tileLayer(
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+                { subdomains: 'abcd', maxZoom: 20, attribution: ATTR_CALLES },
+            ),
+            L.tileLayer(
+                'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+                { maxZoom: 19, attribution: '' },
+            ),
+        ]);
+        const grupo = L.layerGroup([imagen, labelsRespaldo]);
         grupo.options = { nombre: 'Satélite', plantilla, preview: PREVIEW_SAT };
 
         if (typeof L.maplibreGL === 'function') {
-            fetch('https://tiles.openfreemap.org/styles/bright')
-                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('style'))))
+            cargarEstiloBright()
                 .then((estilo) => {
                     const etiquetas = L.maplibreGL({
-                        style: estiloEtiquetasSobreSatelite(estilo),
+                        style: estiloBrightSobreSatelite(estilo),
                         interactive: false,
                         attribution: ATTR_CALLES,
                     });
-                    if (grupo.hasLayer(labelsRaster)) grupo.removeLayer(labelsRaster);
+                    const quitarRespaldo = () => {
+                        if (grupo.hasLayer(labelsRespaldo)) grupo.removeLayer(labelsRespaldo);
+                    };
+                    etiquetas.on('add', () => {
+                        const gl = typeof etiquetas.getMaplibreMap === 'function'
+                            ? etiquetas.getMaplibreMap()
+                            : etiquetas._glMap;
+                        if (!gl) {
+                            setTimeout(quitarRespaldo, 800);
+                            return;
+                        }
+                        const listo = () => quitarRespaldo();
+                        if (gl.loaded()) listo();
+                        else gl.once('load', listo);
+                        gl.once('idle', listo);
+                    });
                     grupo.addLayer(etiquetas);
                 })
-                .catch(() => { /* se quedan las etiquetas raster de respaldo */ });
+                .catch(() => { /* respaldo raster ya visible */ });
         }
         return grupo;
     }

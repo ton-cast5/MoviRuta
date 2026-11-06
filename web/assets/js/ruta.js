@@ -90,6 +90,7 @@
                 <div class="min-w-0 flex-1">
                     <p class="font-semibold">Unidad ${esc(v.unidad)} ${v.chofer ? `<span class="font-normal text-on-surface-variant">· ${esc(v.chofer)}</span>` : ''}</p>
                     <p class="flex items-center gap-1 text-xs text-on-surface-variant">${MR.estadoVehiculo(v)}</p>
+                    ${v.cuenta_con_seguro ? `<p class="mt-0.5 flex items-center gap-1 text-xs text-on-surface-variant">${icono('verified_user', 'text-[14px] text-secondary')} Seguro ${esc(v.nombre_seguro || '')}${v.poliza_seguro ? ` · póliza ${esc(v.poliza_seguro)}` : ''}</p>` : ''}
                     ${v.proxima_parada ? `<p class="mt-0.5 text-xs text-on-surface-variant">Próxima parada: <strong class="text-on-surface">${esc(v.proxima_parada.nombre)}</strong> · <span class="font-semibold text-secondary">${esc(v.proxima_parada.texto)}</span></p>` : ''}
                 </div>
                 ${v.con_ubicacion ? `<button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" data-enfocar="${v.vehiculo_id}">${icono('my_location')} Ver</button>` : ''}

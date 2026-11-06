@@ -145,16 +145,19 @@ CREATE TABLE chofer (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE vehiculo (
-    placa           VARCHAR(15)  NOT NULL PRIMARY KEY,
-    linea_id        VARCHAR(20)  NOT NULL,
-    numero_unidad   VARCHAR(20)  NOT NULL,
-    modelo          VARCHAR(80)  NULL,
-    capacidad       SMALLINT     NULL,
-    cuenta_con_gps  TINYINT      NOT NULL DEFAULT 0,
-    climatizado     TINYINT      NOT NULL DEFAULT 0,
-    tv_a_bordo      TINYINT      NOT NULL DEFAULT 0,
-    accesible       TINYINT      NOT NULL DEFAULT 0,
-    activo          TINYINT      NOT NULL DEFAULT 1,
+    placa              VARCHAR(15)  NOT NULL PRIMARY KEY,
+    linea_id           VARCHAR(20)  NOT NULL,
+    numero_unidad      VARCHAR(20)  NOT NULL,
+    modelo             VARCHAR(80)  NULL,
+    capacidad          SMALLINT     NULL,
+    cuenta_con_gps     TINYINT      NOT NULL DEFAULT 0,
+    climatizado        TINYINT      NOT NULL DEFAULT 0,
+    tv_a_bordo         TINYINT      NOT NULL DEFAULT 0,
+    accesible          TINYINT      NOT NULL DEFAULT 0,
+    activo             TINYINT      NOT NULL DEFAULT 1,
+    cuenta_con_seguro  TINYINT      NOT NULL DEFAULT 0,
+    nombre_seguro      VARCHAR(80)  NULL,
+    poliza_seguro      VARCHAR(40)  NULL,
     UNIQUE KEY uq_vehiculo_unidad (linea_id, numero_unidad),
     CONSTRAINT fk_vehiculo_linea FOREIGN KEY (linea_id) REFERENCES linea_transporte (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

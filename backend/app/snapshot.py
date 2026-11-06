@@ -73,7 +73,8 @@ def instantanea(conn, usuario_id: str | None) -> dict[str, Any]:
     vehiculos = db.fetchall(
         conn,
         """SELECT placa AS id, placa, linea_id, numero_unidad, modelo, capacidad,
-                  cuenta_con_gps, climatizado, tv_a_bordo, accesible, activo
+                  cuenta_con_gps, climatizado, tv_a_bordo, accesible, activo,
+                  cuenta_con_seguro, nombre_seguro, poliza_seguro
            FROM vehiculo ORDER BY placa""",
     )
     paradas = db.fetchall(
@@ -182,6 +183,9 @@ def instantanea(conn, usuario_id: str | None) -> dict[str, Any]:
             "tv_a_bordo": _bool(v["tv_a_bordo"]),
             "accesible": _bool(v["accesible"]),
             "activo": _bool(v["activo"]),
+            "cuenta_con_seguro": _bool(v.get("cuenta_con_seguro")),
+            "nombre_seguro": v.get("nombre_seguro"),
+            "poliza_seguro": v.get("poliza_seguro"),
         }
         for v in vehiculos
     ]

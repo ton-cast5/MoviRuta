@@ -92,11 +92,26 @@ const MR = (() => {
     const ANIO = new Date().getFullYear();
 
     function crearMapa(id, opciones = {}) {
-        const escala = L.Browser.retina ? 2 : 1;
-        const urlGoogle = (capa) => `https://mt{s}.google.com/vt/lyrs=${capa}&hl=es-419&gl=MX&scale=${escala}&x={x}&y={y}&z={z}`;
+        // Capas alineadas a OpenStreetMap: los recorridos se calculan con OSRM (misma red vial).
+        // Google tiles desplazan las calles y el trazo se ve "perdido" fuera de la vialidad.
         const tipos = {
-            mapa: [urlGoogle('m'), { subdomains: '0123', maxZoom: 21, attribution: `Datos del mapa &copy;${ANIO} Google` }, 'Mapa'],
-            satelite: [urlGoogle('y'), { subdomains: '0123', maxZoom: 20, attribution: `Imágenes y datos del mapa &copy;${ANIO} Google` }, 'Satélite'],
+            mapa: [
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                {
+                    subdomains: 'abcd',
+                    maxZoom: 20,
+                    attribution: `&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> ${ANIO}`,
+                },
+                'Mapa',
+            ],
+            satelite: [
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                {
+                    maxZoom: 19,
+                    attribution: `Teselas &copy; Esri ${ANIO}`,
+                },
+                'Satélite',
+            ],
         };
         const mapa = L.map(id, {
             scrollWheelZoom: opciones.scrollWheelZoom ?? true,
@@ -109,7 +124,7 @@ const MR = (() => {
             capas[clave] = L.tileLayer(plantilla, { ...ajustes, nombre, plantilla });
         });
         capas.mapa.addTo(mapa);
-        mapa.getContainer().classList.add('mr-mapa-google');
+        mapa.getContainer().classList.add('mr-mapa');
 
         L.control.zoom({ position: 'bottomright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(mapa);
         new (controlTipoMapa())(capas).addTo(mapa);

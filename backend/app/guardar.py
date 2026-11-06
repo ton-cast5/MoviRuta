@@ -276,7 +276,20 @@ def _vehiculos(conn, nuevos, editados, actor, alcance, mapa_lineas):
         modelo = _txt(fila.get("modelo"), 80) or None
         capacidad = fila.get("capacidad")
         capacidad = int(capacidad) if capacidad not in (None, "") else None
-        flags = {k: _bool01(fila.get(k, False)) for k in ("cuenta_con_gps", "climatizado", "tv_a_bordo", "accesible", "activo")}
+        flags = {
+            k: _bool01(fila.get(k, False))
+            for k in ("cuenta_con_gps", "climatizado", "tv_a_bordo", "accesible", "activo", "cuenta_con_seguro")
+        }
+        nombre_seguro = _txt(fila.get("nombre_seguro"), 80) or None
+        poliza_seguro = _txt(fila.get("poliza_seguro"), 40) or None
+        if flags["cuenta_con_seguro"]:
+            if not nombre_seguro:
+                raise ErrorGuardar("Indica el nombre de la aseguradora.")
+            if not poliza_seguro:
+                raise ErrorGuardar("Indica el número de póliza del seguro.")
+        else:
+            nombre_seguro = None
+            poliza_seguro = None
         if not es_nuevo:
             ocupado = db.fetchone(
                 conn,
@@ -296,21 +309,26 @@ def _vehiculos(conn, nuevos, editados, actor, alcance, mapa_lineas):
             flags["tv_a_bordo"],
             flags["accesible"],
             flags["activo"],
+            flags["cuenta_con_seguro"],
+            nombre_seguro,
+            poliza_seguro,
             placa,
         )
         if es_nuevo:
             db.execute(
                 conn,
                 """INSERT INTO vehiculo (placa, linea_id, numero_unidad, modelo, capacidad,
-                    cuenta_con_gps, climatizado, tv_a_bordo, accesible, activo)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    cuenta_con_gps, climatizado, tv_a_bordo, accesible, activo,
+                    cuenta_con_seguro, nombre_seguro, poliza_seguro)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (placa, *campos[:-1]),
             )
         else:
             db.execute(
                 conn,
                 """UPDATE vehiculo SET linea_id=%s, numero_unidad=%s, modelo=%s, capacidad=%s,
-                    cuenta_con_gps=%s, climatizado=%s, tv_a_bordo=%s, accesible=%s, activo=%s WHERE placa=%s""",
+                    cuenta_con_gps=%s, climatizado=%s, tv_a_bordo=%s, accesible=%s, activo=%s,
+                    cuenta_con_seguro=%s, nombre_seguro=%s, poliza_seguro=%s WHERE placa=%s""",
                 campos,
             )
 
@@ -349,8 +367,8 @@ def _rutas(conn, nuevos, editados, actor, alcance, mapa_lineas, mapa_paradas, ma
 
         te, tg, ti = money(tarifa_edu), money(tarifa_gral), money(tarifa_inapam)
         vel = float(fila.get("velocidad_promedio_kmh") or 0)
-        if vel < 5 or vel > 80:
-            raise ErrorGuardar("La velocidad promedio debe estar entre 5 y 80 km/h.")
+        if vel < 5 or vel > 110:
+            raise ErrorGuardar("La velocidad promedio debe estar entre 5 y 110 km/h.")
         estado_serv = _txt(fila.get("estado_servicio") or "normal", 20)
         aviso = _txt(fila.get("aviso"), 255) or None
         activa = _bool01(fila.get("activa", True))

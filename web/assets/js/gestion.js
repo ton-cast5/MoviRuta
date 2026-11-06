@@ -277,10 +277,13 @@
             const items = [[v.climatizado, 'ac_unit', 'Climatizado'], [v.tv_a_bordo, 'tv', 'TV a bordo'], [v.accesible, 'accessible', 'Accesible']].filter(([si]) => si);
             return items.length ? items.map(([, ic, t]) => `<span title="${t}" class="text-primary">${icono(ic, 'text-[20px]')}</span>`).join('') : '<span class="text-outline">—</span>';
         };
+        const seguroHtml = (v) => v.cuenta_con_seguro
+            ? `<span class="text-sm" title="Póliza ${esc(v.poliza_seguro || '—')}">${icono('verified_user', 'text-[18px] text-secondary align-[-3px]')} ${esc(v.nombre_seguro || 'Con seguro')}</span>`
+            : '<span class="text-outline text-sm">Sin seguro</span>';
         if (P.accion === 'lista') {
             P.vista.innerHTML = P.encabezado('Vehículos', `${lista.length} vehículo(s) registrado(s).`,
                 lineasDisponibles.length ? P.boton('Registrar vehículo', P.enlace('vehiculos', 'accion=nuevo')) : '')
-                + (!lineasDisponibles.length ? sinLineas() : lista.length ? P.tabla(['Unidad', 'Línea', 'Placa', 'Modelo', 'Capacidad', 'GPS', 'Equipamiento', 'Estado', ''], lista.map((v) => `
+                + (!lineasDisponibles.length ? sinLineas() : lista.length ? P.tabla(['Unidad', 'Línea', 'Placa', 'Modelo', 'Capacidad', 'GPS', 'Seguro', 'Equipamiento', 'Estado', ''], lista.map((v) => `
                     <tr>
                         <td><span class="flex items-center gap-2 font-semibold"><span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">${icono('directions_bus', 'text-[18px]')}</span>${esc(v.numero_unidad)}</span></td>
                         <td class="text-sm">${esc(v.linea)}</td>
@@ -288,6 +291,7 @@
                         <td class="text-sm">${esc(v.modelo || '—')}</td>
                         <td class="text-sm">${v.capacidad || '—'}</td>
                         <td>${v.cuenta_con_gps ? `<span title="Con dispositivo de ubicación" class="text-secondary">${icono('sensors')}</span>` : `<span title="Sin dispositivo de ubicación" class="text-outline">${icono('location_disabled')}</span>`}</td>
+                        <td>${seguroHtml(v)}</td>
                         <td><span class="flex gap-1">${equipo(v)}</span></td>
                         <td>
                             ${!v.activo ? `<span class="mr-estado suspendido">${icono('block')}Inactivo</span>` : v.ruta_en_curso !== null ? `<span class="mr-estado normal">${icono('sensors')}En ruta ${esc(v.ruta_en_curso)}</span>` : v.fuera_de_servicio ? `<span class="mr-estado suspendido">${icono('car_repair')}Fuera de servicio</span>` : `<span class="mr-etiqueta">${icono('check_circle', 'text-secondary')}Disponible</span>`}
@@ -300,7 +304,11 @@
         const vehiculo = P.accion === 'editar' ? lista.find((v) => String(v.id) === String(P.id)) : null;
         if (P.accion === 'editar' && !vehiculo) { P.noEncontrado('El vehículo no existe o no pertenece a tus líneas.', 'vehiculos', 'Volver a vehículos'); return; }
         if (!lineasDisponibles.length) { P.vista.innerHTML = sinLineas(); return; }
-        const d = vehiculo || { linea_id: lineaInicial(), numero_unidad: '', placa: '', modelo: '', capacidad: '', cuenta_con_gps: true, climatizado: false, tv_a_bordo: false, accesible: false, activo: true };
+        const d = vehiculo || {
+            linea_id: lineaInicial(), numero_unidad: '', placa: '', modelo: '', capacidad: '',
+            cuenta_con_gps: true, climatizado: false, tv_a_bordo: false, accesible: false, activo: true,
+            cuenta_con_seguro: false, nombre_seguro: '', poliza_seguro: '',
+        };
         P.vista.innerHTML = `
             ${P.migas('Vehículos', 'vehiculos', vehiculo ? 'Editar' : 'Nuevo')}
             ${P.encabezado(vehiculo ? 'Editar vehículo' : 'Registrar vehículo', 'La placa es el identificador; puedes cambiar la unidad de línea cuando no esté en viaje.')}
@@ -322,10 +330,22 @@
                             ${P.interruptor('accesible', `${icono('accessible', 'text-[18px] text-primary')} Accesible`, d.accesible)}
                         </div>
                     </div>
+                    <div class="md:col-span-12 mt-2 rounded-xl bg-surface-container-low p-4">
+                        <div class="mb-3">${P.interruptor('cuenta_con_seguro', `${icono('verified_user', 'text-[18px] text-primary')} Cuenta con seguro del vehículo`, d.cuenta_con_seguro)}</div>
+                        <div id="camposSeguro" class="grid gap-4 md:grid-cols-12 ${d.cuenta_con_seguro ? '' : 'hidden'}">
+                            ${P.campo('nombre_seguro', 'Nombre de la aseguradora', P.entrada('nombre_seguro', d.nombre_seguro || '', 'maxlength="80"'), { clase: 'md:col-span-6' })}
+                            ${P.campo('poliza_seguro', 'Número de póliza', P.entrada('poliza_seguro', d.poliza_seguro || '', 'maxlength="40"'), { clase: 'md:col-span-6' })}
+                        </div>
+                    </div>
                 </div>
                 ${P.pieFormulario(P.enlace('vehiculos'))}
             </form>`;
-        P.alGuardar(document.getElementById('formulario'), (datos) => G.guardarVehiculo(vehiculo?.id || null, { ...datos, placa: vehiculo ? vehiculo.placa : datos.placa }, ids),
+        const formVeh = document.getElementById('formulario');
+        const toggleSeguro = formVeh.querySelector('#cuenta_con_seguro');
+        const cajaSeguro = document.getElementById('camposSeguro');
+        const syncSeguro = () => cajaSeguro.classList.toggle('hidden', !toggleSeguro.checked);
+        toggleSeguro.addEventListener('change', syncSeguro);
+        P.alGuardar(formVeh, (datos) => G.guardarVehiculo(vehiculo?.id || null, { ...datos, placa: vehiculo ? vehiculo.placa : datos.placa }, ids),
             { volverA: `${u.rol}/vehiculos.html`, mensaje: vehiculo ? 'El vehículo se actualizó.' : 'Vehículo registrado.' });
     }
 
@@ -499,7 +519,7 @@
                         ${P.campo('tarifa_edu', 'Tarifa estudiantil ($)', P.entrada('tarifa_edu', d.tarifa_edu, 'type="number" step="0.5" min="0"'), { clase: 'md:col-span-3', opcional: true })}
                         ${P.campo('tarifa_gral', 'Tarifa general ($)', P.entrada('tarifa_gral', d.tarifa_gral, 'type="number" step="0.5" min="0"'), { clase: 'md:col-span-3', opcional: true })}
                         ${P.campo('tarifa_inapam', 'Tarifa INAPAM ($)', P.entrada('tarifa_inapam', d.tarifa_inapam, 'type="number" step="0.5" min="0"'), { clase: 'md:col-span-3', opcional: true })}
-                        ${P.campo('velocidad_promedio_kmh', 'Velocidad prom. (km/h)', P.entrada('velocidad_promedio_kmh', d.velocidad_promedio_kmh, 'type="number" step="0.5" min="5" max="80" required'), { clase: 'md:col-span-3' })}
+                        ${P.campo('velocidad_promedio_kmh', 'Velocidad prom. (km/h)', P.entrada('velocidad_promedio_kmh', d.velocidad_promedio_kmh, 'type="number" step="0.5" min="5" max="110" required'), { clase: 'md:col-span-3' })}
                         ${P.campo('estado_servicio', 'Estado del servicio', P.selector('estado_servicio', [['normal', 'Operando con normalidad'], ['con_retrasos', 'Con retrasos'], ['suspendida', 'Suspendido']], d.estado_servicio), { clase: 'md:col-span-4' })}
                         ${P.campo('aviso', 'Aviso para pasajeros', P.entrada('aviso', d.aviso, 'maxlength="255" placeholder="Ej. Desvío temporal por obras en…"'), { clase: 'md:col-span-12', opcional: true })}
                         <div class="md:col-span-12">${P.interruptor('activa', 'Ruta publicada (visible para pasajeros)', d.activa)}</div>
@@ -520,7 +540,7 @@
                         <h3 class="mb-3 flex items-center gap-2 font-headline-sm text-headline-sm">${icono('draw', 'text-secondary')} Trazado en el mapa</h3>
                         <div class="mb-3 flex flex-wrap gap-2">
                             <button class="mr-btn mr-btn-contorno mr-btn-sm" type="button" id="btnDibujar">${icono('edit')} <span>Dibujar trazado</span></button>
-                            <button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" id="btnDesdeParadas">${icono('auto_fix_high')} Unir paradas en orden</button>
+                            <button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" id="btnDesdeParadas">${icono('route')} <span>Unir paradas por calles</span></button>
                             <button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" id="btnDeshacer">${icono('undo')} Deshacer punto</button>
                             <button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" id="btnBorrarTrazado">${icono('delete')} Borrar trazado</button>
                         </div>
@@ -654,13 +674,53 @@
             puntos = [];
             pintarTrazado();
         });
+        async function tramoOsrm(a, b) {
+            const url = `https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`;
+            const r = await fetch(url);
+            if (!r.ok) throw new Error('No se pudo calcular el tramo.');
+            const data = await r.json();
+            if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) {
+                throw new Error('No hay vialidad entre esas paradas.');
+            }
+            const pts = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+            pts[0] = [a[0], a[1]];
+            pts[pts.length - 1] = [b[0], b[1]];
+            return pts;
+        }
+
         document.getElementById('btnDesdeParadas').addEventListener('click', async () => {
             if (seleccion.length < 2) { MRUI.aviso('Agrega al menos dos paradas para generar el trazado.', 'advertencia'); return; }
-            if (puntos.length && !(await MRUI.confirmar({ titulo: '¿Reemplazar el trazado?', mensaje: 'Se reemplazará el trazado actual por líneas rectas entre las paradas.', aceptar: 'Reemplazar', icono: 'auto_fix_high' }))) return;
-            puntos = seleccion.map((pid) => [porId.get(pid).latitud, porId.get(pid).longitud]);
-            if (form.sentido.value === 'circular') puntos.push(puntos[0].slice());
-            pintarTrazado();
-            mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
+            if (puntos.length && !(await MRUI.confirmar({
+                titulo: '¿Reemplazar el trazado?',
+                mensaje: 'Se calculará un recorrido por calles (como en Google Maps) según el orden de las paradas.',
+                aceptar: 'Calcular',
+                icono: 'route',
+            }))) return;
+
+            const btn = document.getElementById('btnDesdeParadas');
+            const etiqueta = btn.querySelector('span:last-child') || btn;
+            const textoAntes = etiqueta.textContent;
+            btn.disabled = true;
+            etiqueta.textContent = 'Calculando trazado…';
+            try {
+                const coords = seleccion.map((pid) => [porId.get(pid).latitud, porId.get(pid).longitud]);
+                if (form.sentido.value === 'circular') coords.push(coords[0].slice());
+                const nuevo = [];
+                for (let i = 0; i < coords.length - 1; i += 1) {
+                    const seg = await tramoOsrm(coords[i], coords[i + 1]);
+                    if (nuevo.length) seg.shift();
+                    nuevo.push(...seg);
+                }
+                puntos = nuevo.map(([lat, lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]);
+                pintarTrazado();
+                if (puntos.length > 1) mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
+                MRUI.aviso(`Trazado listo: ${puntos.length} puntos por calles.`, 'exito', 2800);
+            } catch (e) {
+                MRUI.aviso(e.message || 'No se pudo calcular el trazado por calles. Intenta de nuevo.', 'error');
+            } finally {
+                btn.disabled = false;
+                etiqueta.textContent = textoAntes || 'Unir paradas por calles';
+            }
         });
 
         inputColor.addEventListener('input', () => { pintarParadas(); pintarTrazado(); });
@@ -816,6 +876,7 @@
                             <p class="font-semibold">Unidad ${esc(v.unidad)} <span class="font-normal text-on-surface-variant">· ${esc(v.placa)}</span></p>
                             <p>${esc(v.chofer)} · desde ${esc(v.inicio)}</p>
                             <p class="flex items-center gap-1 text-xs text-on-surface-variant">${MR.estadoVehiculo(v)}</p>
+                            ${v.cuenta_con_seguro ? `<p class="mt-0.5 flex items-center gap-1 text-xs text-on-surface-variant">${icono('verified_user', 'text-[14px] text-secondary')} ${esc(v.nombre_seguro || 'Con seguro')}${v.poliza_seguro ? ` · ${esc(v.poliza_seguro)}` : ''}</p>` : ''}
                         </div>
                         ${v.con_ubicacion ? `<button class="mr-btn mr-btn-secundario mr-btn-sm mr-btn-icono" type="button" data-enfocar="${v.vehiculo_id}" aria-label="Ver en el mapa" title="Ver en el mapa">${icono('my_location', 'text-[18px]')}</button>` : ''}
                     </div>`).join('') : MR.htmlVacio('bedtime', 'No hay unidades en circulación en este momento.');

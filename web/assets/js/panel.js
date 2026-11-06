@@ -12,21 +12,23 @@ const MRP = (() => {
 
     function encabezado(titulo, descripcion = '', acciones = '') {
         return `
-            <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                    <h2 class="font-headline-md text-headline-md text-on-surface">${esc(titulo)}</h2>
-                    ${descripcion ? `<p class="mt-1 text-sm text-on-surface-variant">${descripcion}</p>` : ''}
+            <div class="mr-tarjeta mb-5 p-5">
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface">${esc(titulo)}</h2>
+                        ${descripcion ? `<p class="mt-1 text-sm text-on-surface-variant">${descripcion}</p>` : ''}
+                    </div>
+                    ${acciones ? `<div class="flex flex-wrap gap-2">${acciones}</div>` : ''}
                 </div>
-                ${acciones ? `<div class="flex flex-wrap gap-2">${acciones}</div>` : ''}
             </div>`;
     }
 
     function migas(texto, pagina, actual) {
         return `
-            <nav class="mb-3 flex items-center gap-1 text-sm text-on-surface-variant" aria-label="Ruta de navegación">
+            <nav class="mb-3 flex items-center gap-1 rounded-xl bg-white/95 px-3 py-2 text-sm text-on-surface-variant shadow-sm ring-1 ring-black/5" aria-label="Ruta de navegación">
                 <a class="mr-enlace" href="${enlace(pagina)}">${esc(texto)}</a>
                 ${icono('chevron_right', 'text-[18px] text-outline')}
-                <span aria-current="page">${esc(actual)}</span>
+                <span class="font-semibold text-on-surface" aria-current="page">${esc(actual)}</span>
             </nav>`;
     }
 

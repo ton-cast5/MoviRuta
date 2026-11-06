@@ -449,6 +449,7 @@ const MRServicios = (() => {
             numero_unidad: veh.numero_unidad, placa: veh.placa, cuenta_con_gps: veh.cuenta_con_gps, linea_id: veh.linea_id,
             climatizado: veh.climatizado && !conFalla(veh.id, 'clima'), tv_a_bordo: veh.tv_a_bordo,
             accesible: veh.accesible && !conFalla(veh.id, 'rampa'), vehiculo_activo: veh.activo,
+            cuenta_con_seguro: !!veh.cuenta_con_seguro, nombre_seguro: veh.nombre_seguro || null, poliza_seguro: veh.poliza_seguro || null,
             chofer_nombre: usuarioDe(c.usuario_id)?.nombre || '', linea_nombre: lineaDe(r.linea_id)?.nombre || '',
         };
     }
@@ -531,6 +532,9 @@ const MRServicios = (() => {
                 chofer: v.chofer_nombre, hora_salida: formatoHora(v.inicio),
                 pasajeros_salida: v.pasajeros_salida ?? null,
                 climatizado: !!v.climatizado, tv_a_bordo: !!v.tv_a_bordo, accesible: !!v.accesible,
+                cuenta_con_seguro: !!v.cuenta_con_seguro,
+                nombre_seguro: v.nombre_seguro || null,
+                poliza_seguro: v.poliza_seguro || null,
             };
             if (detalleGestion) {
                 item.placa = v.placa;
@@ -1145,11 +1149,15 @@ const MRServicios = (() => {
 
     function guardarVehiculo(id, d, ids) {
         const actual = id ? vehiculoDe(id) : null;
+        const cuentaSeguro = !!d.cuenta_con_seguro;
         const datos = {
             linea_id: idDe(d.linea_id) || '', numero_unidad: limpiar(d.numero_unidad, 20).toUpperCase(),
             placa: limpiar(d.placa, 15).toUpperCase(), modelo: limpiar(d.modelo, 80), capacidad: numero(d.capacidad),
             cuenta_con_gps: !!d.cuenta_con_gps, climatizado: !!d.climatizado, tv_a_bordo: !!d.tv_a_bordo,
             accesible: !!d.accesible, activo: !!d.activo,
+            cuenta_con_seguro: cuentaSeguro,
+            nombre_seguro: cuentaSeguro ? limpiar(d.nombre_seguro, 80) : '',
+            poliza_seguro: cuentaSeguro ? limpiar(d.poliza_seguro, 40) : '',
         };
         const errores = [];
         if (!dentro(datos.linea_id, ids) || !lineaDe(datos.linea_id)) errores.push('Selecciona una línea válida.');
@@ -1158,11 +1166,18 @@ const MRServicios = (() => {
         if (!/^[A-Z0-9-]{4,15}$/.test(datos.placa)) errores.push('La placa debe tener de 4 a 15 letras, números o guiones.');
         else if (bd.vehiculos.some((v) => v.placa === datos.placa && v.id !== id)) errores.push('Esa placa ya está registrada.');
         if (datos.capacidad !== null && (datos.capacidad < 1 || datos.capacidad > 300)) errores.push('La capacidad debe estar entre 1 y 300 pasajeros.');
+        if (cuentaSeguro && !datos.nombre_seguro) errores.push('Indica el nombre de la aseguradora.');
+        if (cuentaSeguro && !datos.poliza_seguro) errores.push('Indica el número de póliza del seguro.');
         if (actual && vehiculoOcupado(id) && (!datos.activo || datos.linea_id !== actual.linea_id)) {
             errores.push('El vehículo está en un viaje en curso; no puede desactivarse ni cambiar de línea hasta que termine.');
         }
         if (errores.length) return { errores };
-        const registro = { ...datos, modelo: datos.modelo || null };
+        const registro = {
+            ...datos,
+            modelo: datos.modelo || null,
+            nombre_seguro: datos.nombre_seguro || null,
+            poliza_seguro: datos.poliza_seguro || null,
+        };
         if (actual) Object.assign(actual, registro);
         else bd.vehiculos.push({ id: registro.placa, placa: registro.placa, ...registro });
         guardar();
@@ -1206,7 +1221,7 @@ const MRServicios = (() => {
         for (const [k, et] of [['tarifa_edu', 'estudiantil'], ['tarifa_gral', 'general'], ['tarifa_inapam', 'INAPAM']]) {
             if (datos[k] !== null && (datos[k] < 0 || datos[k] > 9999)) errores.push(`La tarifa ${et} no es válida.`);
         }
-        if (datos.velocidad_promedio_kmh === null || datos.velocidad_promedio_kmh < 5 || datos.velocidad_promedio_kmh > 80) errores.push('La velocidad promedio debe estar entre 5 y 80 km/h.');
+        if (datos.velocidad_promedio_kmh === null || datos.velocidad_promedio_kmh < 5 || datos.velocidad_promedio_kmh > 110) errores.push('La velocidad promedio debe estar entre 5 y 110 km/h.');
         if (!['normal', 'con_retrasos', 'suspendida'].includes(datos.estado_servicio)) errores.push('Selecciona el estado del servicio.');
         if (datos.paradas.length < 2) errores.push('Agrega al menos dos paradas activas en el orden del recorrido.');
         if (datos.recorrido.length < 2) errores.push('Dibuja el trazado de la ruta en el mapa (al menos dos puntos).');

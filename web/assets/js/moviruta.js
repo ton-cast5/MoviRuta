@@ -134,20 +134,63 @@ const MR = (() => {
         return capa;
     }
 
+    /** Estilo Bright solo con etiquetas (y calles finas), legible sobre imagen satélite. */
+    function estiloEtiquetasSobreSatelite(estilo) {
+        const copia = JSON.parse(JSON.stringify(estilo));
+        const esCalle = (l) => {
+            const id = `${l.id || ''} ${l['source-layer'] || ''}`;
+            return l.type === 'line' && /road|bridge|tunnel|highway|transport|street/i.test(id);
+        };
+        copia.layers = (copia.layers || []).filter((l) => l.type === 'background' || l.type === 'symbol' || esCalle(l));
+        copia.layers = copia.layers.map((l) => {
+            if (l.type === 'background') {
+                return { ...l, paint: { 'background-color': 'rgba(0,0,0,0)', 'background-opacity': 0 } };
+            }
+            if (l.type === 'line') {
+                const paint = { ...(l.paint || {}) };
+                paint['line-color'] = '#ffffff';
+                paint['line-opacity'] = Math.min(0.5, paint['line-opacity'] == null ? 0.5 : Number(paint['line-opacity']));
+                return { ...l, paint };
+            }
+            if (l.type === 'symbol') {
+                const paint = { ...(l.paint || {}) };
+                // Mismas etiquetas Bright, contraste para satélite (texto claro + halo).
+                paint['text-color'] = '#ffffff';
+                paint['text-halo-color'] = 'rgba(0,0,0,0.92)';
+                paint['text-halo-width'] = Math.max(1.8, Number(paint['text-halo-width']) || 0);
+                paint['text-halo-blur'] = 0.4;
+                return { ...l, paint };
+            }
+            return l;
+        });
+        return copia;
+    }
+
     function capaSatelite() {
-        // Híbrido tipo Google: imagen Esri + vías + nombres de lugares/ciudades.
+        // Imagen Esri + las mismas etiquetas OpenFreeMap Bright del mapa normal.
         const plantilla = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
         const imagen = L.tileLayer(plantilla, { maxZoom: 19, attribution: ATTR_SAT });
-        const vias = L.tileLayer(
-            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
-            { maxZoom: 19, opacity: 0.95, attribution: '' },
+        const labelsRaster = L.tileLayer(
+            'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+            { subdomains: 'abcd', maxZoom: 20, opacity: 1, attribution: ATTR_CALLES },
         );
-        const lugares = L.tileLayer(
-            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-            { maxZoom: 19, attribution: '' },
-        );
-        const grupo = L.layerGroup([imagen, vias, lugares]);
+        const grupo = L.layerGroup([imagen, labelsRaster]);
         grupo.options = { nombre: 'Satélite', plantilla, preview: PREVIEW_SAT };
+
+        if (typeof L.maplibreGL === 'function') {
+            fetch('https://tiles.openfreemap.org/styles/bright')
+                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('style'))))
+                .then((estilo) => {
+                    const etiquetas = L.maplibreGL({
+                        style: estiloEtiquetasSobreSatelite(estilo),
+                        interactive: false,
+                        attribution: ATTR_CALLES,
+                    });
+                    if (grupo.hasLayer(labelsRaster)) grupo.removeLayer(labelsRaster);
+                    grupo.addLayer(etiquetas);
+                })
+                .catch(() => { /* se quedan las etiquetas raster de respaldo */ });
+        }
         return grupo;
     }
 

@@ -384,9 +384,9 @@ input[type="color"].mr-campo { padding: .25rem; height: 46px; cursor: pointer; }
     transform-origin: 50% 60%;
 }
 .mr-vertice-trazo {
-    display: block; width: 14px; height: 14px; border-radius: 50%;
+    display: block; width: 18px; height: 18px; border-radius: 50%;
     background: #fff; border: 3px solid #004532;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, .4); cursor: grab;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, .45); cursor: grab;
 }
 .mr-vertice-trazo:active { cursor: grabbing; }
 

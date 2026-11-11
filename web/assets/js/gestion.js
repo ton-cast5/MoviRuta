@@ -499,7 +499,8 @@
         const disponibles = G.paradasTodas().filter((p) => p.activa);
         const porId = new Map(disponibles.map((p) => [String(p.id), p]));
         let seleccion = (d.paradas || []).map(String).filter((pid) => porId.has(pid));
-        let puntos = (d.recorrido || []).map((p) => p.slice());
+        let geometria = (d.recorrido || []).map((p) => p.slice()); // recorrido denso (calles) para mapa/guardar
+        let controles = []; // pocos puntos arrastrables
         let dibujando = false;
 
         P.vista.innerHTML = `
@@ -547,9 +548,9 @@
                         <p id="estadoTrazado" class="mb-2 hidden items-center gap-1.5 text-xs font-semibold text-secondary">${icono('tune', 'text-[16px]')} Trazado ajustado a mano — el auto no lo sobrescribe. Usa “Unir paradas” para recalcular.</p>
                         <div class="mr-mapa-tarjeta relative h-[460px] overflow-hidden rounded-xl ring-1 ring-black/5">
                             <div id="mapa" class="mr-mapa"></div>
-                            <div id="avisoDibujo" class="mr-mapa-capa pointer-events-none absolute left-1/2 top-3 hidden -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">${icono('ads_click', 'text-[18px]')} Clic = agregar · Arrastra puntos · Doble clic en un punto = borrar</div>
+                            <div id="avisoDibujo" class="mr-mapa-capa pointer-events-none absolute left-1/2 top-3 hidden -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">${icono('ads_click', 'text-[18px]')} Clic = agregar control · Arrastra · Doble clic = borrar</div>
                         </div>
-                        <p class="mr-ayuda">Auto une paradas por calles. Arrastra un punto hacia donde debe pasar: al soltar se sugiere el tramo por calles. Clic en la línea inserta y también sugiere. <span id="totalPuntos" class="font-semibold"></span></p>
+                        <p class="mr-ayuda">Pocos puntos de control: une por calles, arrastra uno hacia donde debe pasar y al soltar se recalcula ese tramo. Clic en la línea inserta otro control. <span id="totalPuntos" class="font-semibold"></span></p>
                     </section>
                 </div>
                 ${P.pieFormulario(P.enlace('rutas'), 'Guardar ruta')}
@@ -561,9 +562,9 @@
         const btnDibujar = document.getElementById('btnDibujar');
         const mapa = MR.crearMapa('mapa');
         const marcadores = new Map();
-        const linea = L.polyline(puntos, { color: inputColor.value, weight: 5, opacity: 0.85, interactive: true }).addTo(mapa);
+        const linea = L.polyline(geometria, { color: inputColor.value, weight: 5, opacity: 0.85, interactive: true }).addTo(mapa);
         const vertices = L.layerGroup().addTo(mapa);
-        let trazadoAjustado = puntos.length > 0; // al editar ruta existente se respeta el recorrido guardado
+        let trazadoAjustado = geometria.length > 0; // al editar ruta existente se respeta el recorrido guardado
         let sugiriendoCalle = false;
         let uniendoCalles = false;
 
@@ -580,71 +581,130 @@
             return lista.map(([lat, lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]);
         }
 
-        /** Ancla a ~metros de distancia a lo largo del trazado (para no re-rutar solo vecinos densos). */
-        function anclaPorDistancia(desde, dir, metros) {
-            let i = desde;
-            let acum = 0;
-            while ((dir < 0 ? i > 0 : i < puntos.length - 1) && acum < metros) {
-                const j = i + dir;
-                acum += L.latLng(puntos[i]).distanceTo(L.latLng(puntos[j]));
-                i = j;
-            }
-            return i;
+        function distanciaASegmentoMetros(p, a, b) {
+            const P = L.latLng(p);
+            const A = L.latLng(a);
+            const B = L.latLng(b);
+            const ab = A.distanceTo(B);
+            if (ab < 1) return P.distanceTo(A);
+            const dx = B.lng - A.lng;
+            const dy = B.lat - A.lat;
+            const denom = (dx * dx) + (dy * dy) || 1e-12;
+            const t = Math.max(0, Math.min(1, ((P.lng - A.lng) * dx + (P.lat - A.lat) * dy) / denom));
+            return P.distanceTo(L.latLng(A.lat + (t * dy), A.lng + (t * dx)));
         }
 
-        /** Al mover/insertar un vértice, rellena el tramo por calles pasando por ese punto. */
+        /** Pocos controles: Douglas-Peucker + espacio mínimo (~90 m). */
+        function simplificarTrazado(lista, tolerancia = 36, minEspacio = 90) {
+            if (!lista || lista.length <= 2) return redondearPuntos((lista || []).map((p) => p.slice()));
+            const keep = new Array(lista.length).fill(false);
+            keep[0] = true;
+            keep[lista.length - 1] = true;
+            const dp = (start, end) => {
+                if (end <= start + 1) return;
+                let maxD = 0;
+                let idx = -1;
+                for (let i = start + 1; i < end; i += 1) {
+                    const d = distanciaASegmentoMetros(lista[i], lista[start], lista[end]);
+                    if (d > maxD) { maxD = d; idx = i; }
+                }
+                if (maxD >= tolerancia && idx >= 0) {
+                    keep[idx] = true;
+                    dp(start, idx);
+                    dp(idx, end);
+                }
+            };
+            dp(0, lista.length - 1);
+            const base = lista.filter((_, i) => keep[i]).map((p) => p.slice());
+            if (base.length <= 2) return redondearPuntos(base);
+            const out = [base[0]];
+            for (let i = 1; i < base.length - 1; i += 1) {
+                if (L.latLng(out[out.length - 1]).distanceTo(L.latLng(base[i])) >= minEspacio) out.push(base[i]);
+            }
+            const ultimo = base[base.length - 1];
+            if (L.latLng(out[out.length - 1]).distanceTo(L.latLng(ultimo)) < 1) out[out.length - 1] = ultimo;
+            else out.push(ultimo);
+            return redondearPuntos(out);
+        }
+
+        function indiceMasCercano(lista, punto) {
+            let mejor = 0;
+            let dist = Infinity;
+            lista.forEach((p, i) => {
+                const d = L.latLng(p).distanceTo(L.latLng(punto));
+                if (d < dist) { dist = d; mejor = i; }
+            });
+            return mejor;
+        }
+
+        function sincronizarControlesDesdeGeometria() {
+            controles = geometria.length >= 2 ? simplificarTrazado(geometria) : redondearPuntos(geometria.map((p) => p.slice()));
+        }
+
+        /** Recalcula geometría por calles solo entre controles vecinos del índice movido. */
+        async function regenerarGeometriaAlrededor(indice) {
+            if (controles.length < 2) {
+                geometria = redondearPuntos(controles.map((p) => p.slice()));
+                return;
+            }
+            const izq = Math.max(0, indice - 1);
+            const der = Math.min(controles.length - 1, indice + 1);
+            const densos = [];
+            for (let i = izq; i < der; i += 1) {
+                const seg = await MR.trazarCalle(controles[i], controles[i + 1]);
+                if (densos.length) seg.shift();
+                densos.push(...seg);
+            }
+            if (!densos.length) return;
+            if (!geometria.length) {
+                geometria = redondearPuntos(densos);
+                return;
+            }
+            const a = indiceMasCercano(geometria, controles[izq]);
+            const b = indiceMasCercano(geometria, controles[der]);
+            const desde = Math.min(a, b);
+            const hasta = Math.max(a, b);
+            geometria.splice(desde, hasta - desde + 1, ...redondearPuntos(densos));
+        }
+
+        /** Al mover/insertar un control: re-traza por calles con sus vecinos (ordenado). */
         async function sugerirCallesEnIndice(indice) {
-            if (sugiriendoCalle || dibujando || uniendoCalles || puntos.length < 2) return;
-            if (indice < 0 || indice >= puntos.length) return;
-            const via = puntos[indice];
-            if (!via) return;
+            if (sugiriendoCalle || dibujando || uniendoCalles || controles.length < 2) return;
+            if (indice < 0 || indice >= controles.length) return;
             sugiriendoCalle = true;
             const totalEl = document.getElementById('totalPuntos');
-            const textoAntes = totalEl?.textContent || '';
-            if (totalEl) totalEl.textContent = 'Sugiriendo tramo por calles…';
+            if (totalEl) totalEl.textContent = 'Recalculando tramo…';
             try {
-                const ventana = 240;
-                const izq = indice === 0 ? 0 : anclaPorDistancia(indice, -1, ventana);
-                const der = indice === puntos.length - 1 ? puntos.length - 1 : anclaPorDistancia(indice, 1, ventana);
-                let reemplazo = [];
-                if (indice === 0) {
-                    reemplazo = await MR.trazarCalle(via, puntos[der]);
-                } else if (indice === puntos.length - 1) {
-                    reemplazo = await MR.trazarCalle(puntos[izq], via);
-                } else {
-                    const seg1 = await MR.trazarCalle(puntos[izq], via);
-                    const seg2 = await MR.trazarCalle(via, puntos[der]);
-                    reemplazo = seg1.slice();
-                    if (seg2.length) reemplazo.push(...seg2.slice(1));
-                }
-                if (reemplazo.length < 2) return;
-                puntos.splice(izq, der - izq + 1, ...redondearPuntos(reemplazo));
+                await regenerarGeometriaAlrededor(indice);
                 marcarAjusteManual(true);
                 pintarTrazado();
-                MRUI.aviso('Tramo sugerido por calles. Arrastra otro punto si hace falta.', 'exito', 2200);
+                MRUI.aviso('Tramo por calles listo. Sigue con el siguiente control si hace falta.', 'exito', 2000);
             } catch (e) {
                 console.warn('[MoviRuta] Sugerencia de calles:', e?.message || e);
                 pintarTrazado();
                 MRUI.aviso('No se pudo sugerir por calles; se dejó tu punto manual.', 'advertencia', 2600);
             } finally {
                 sugiriendoCalle = false;
-                if (totalEl && !trazadoAjustado) totalEl.textContent = textoAntes;
-                else if (totalEl) {
-                    totalEl.textContent = puntos.length
-                        ? `Puntos del trazado: ${puntos.length}${trazadoAjustado ? ' (ajustado)' : ''}.`
+                if (totalEl) {
+                    totalEl.textContent = controles.length
+                        ? `Controles: ${controles.length}${trazadoAjustado ? ' (ajustado)' : ''}.`
                         : '';
                 }
             }
         }
+
+        sincronizarControlesDesdeGeometria();
 
         disponibles.forEach((p) => {
             const m = L.marker([p.latitud, p.longitud], { icon: MR.iconoParada('#94A3B8'), title: p.nombre })
                 .bindTooltip(p.nombre)
                 .on('click', () => {
                     if (dibujando) {
-                        puntos.push([p.latitud, p.longitud]);
+                        controles.push([p.latitud, p.longitud]);
+                        geometria = redondearPuntos(controles.map((c) => c.slice()));
                         marcarAjusteManual(true);
                         pintarTrazado();
+                        sugerirCallesEnIndice(controles.length - 1);
                         return;
                     }
                     const pid = String(p.id);
@@ -678,31 +738,33 @@
             return L.divIcon({
                 className: 'mr-icono-limpio',
                 html: '<span class="mr-vertice-trazo"></span>',
-                iconSize: [14, 14],
-                iconAnchor: [7, 7],
+                iconSize: [18, 18],
+                iconAnchor: [9, 9],
             });
         }
 
         function pintarTrazado() {
-            linea.setLatLngs(puntos);
+            const trazo = geometria.length >= 2 ? geometria : controles;
+            linea.setLatLngs(trazo);
             linea.setStyle({ color: inputColor.value });
             vertices.clearLayers();
-            puntos.forEach((p, i) => {
+            controles.forEach((p, i) => {
                 const m = L.marker(p, {
                     draggable: true,
                     icon: iconoVertice(),
-                    title: `Punto ${i + 1} — arrastra para ajustar`,
+                    title: `Control ${i + 1} — arrastra para ajustar el tramo`,
                     zIndexOffset: 600,
                 }).addTo(vertices);
                 m.on('drag', () => {
                     const ll = m.getLatLng();
-                    puntos[i] = [ll.lat, ll.lng];
-                    linea.setLatLngs(puntos);
+                    controles[i] = [ll.lat, ll.lng];
+                    // Vista previa rápida con los controles (sin saturar de vértices)
+                    linea.setLatLngs(controles);
                 });
                 m.on('dragend', () => {
                     if (sugiriendoCalle) return;
                     const ll = m.getLatLng();
-                    puntos[i] = [Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6))];
+                    controles[i] = [Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6))];
                     marcarAjusteManual(true);
                     pintarTrazado();
                     sugerirCallesEnIndice(i);
@@ -710,13 +772,15 @@
                 m.on('dblclick', (e) => {
                     L.DomEvent.stop(e);
                     if (sugiriendoCalle) return;
-                    if (puntos.length <= 2) {
-                        MRUI.aviso('Deja al menos 2 puntos en el trazado.', 'advertencia', 2200);
+                    if (controles.length <= 2) {
+                        MRUI.aviso('Deja al menos 2 controles en el trazado.', 'advertencia', 2200);
                         return;
                     }
-                    puntos.splice(i, 1);
+                    controles.splice(i, 1);
                     marcarAjusteManual(true);
+                    const vecino = Math.max(0, Math.min(i, controles.length - 1));
                     pintarTrazado();
+                    sugerirCallesEnIndice(vecino);
                 });
             });
             const chip = document.getElementById('estadoTrazado');
@@ -725,25 +789,27 @@
                 chip.classList.toggle('flex', trazadoAjustado);
             }
             if (!sugiriendoCalle) {
-                document.getElementById('totalPuntos').textContent = puntos.length
-                    ? `Puntos del trazado: ${puntos.length}${trazadoAjustado ? ' (ajustado)' : ''}.`
+                document.getElementById('totalPuntos').textContent = controles.length
+                    ? `Controles: ${controles.length}${trazadoAjustado ? ' (ajustado)' : ''}.`
                     : '';
             }
         }
 
         function insertarPuntoEnLinea(latlng) {
             if (sugiriendoCalle) return;
-            if (puntos.length < 2) {
-                puntos.push([Number(latlng.lat.toFixed(6)), Number(latlng.lng.toFixed(6))]);
+            const pt = [Number(latlng.lat.toFixed(6)), Number(latlng.lng.toFixed(6))];
+            if (controles.length < 2) {
+                controles.push(pt);
+                geometria = redondearPuntos(controles.map((c) => c.slice()));
                 marcarAjusteManual(true);
                 pintarTrazado();
-                sugerirCallesEnIndice(puntos.length - 1);
+                if (controles.length >= 2) sugerirCallesEnIndice(controles.length - 1);
                 return;
             }
             let mejor = { i: 1, d: Infinity };
-            for (let i = 0; i < puntos.length - 1; i += 1) {
-                const a = L.latLng(puntos[i]);
-                const b = L.latLng(puntos[i + 1]);
+            for (let i = 0; i < controles.length - 1; i += 1) {
+                const a = L.latLng(controles[i]);
+                const b = L.latLng(controles[i + 1]);
                 const d = L.LineUtil.pointToSegmentDistance(
                     mapa.latLngToLayerPoint(latlng),
                     mapa.latLngToLayerPoint(a),
@@ -751,7 +817,7 @@
                 );
                 if (d < mejor.d) mejor = { i: i + 1, d };
             }
-            puntos.splice(mejor.i, 0, [Number(latlng.lat.toFixed(6)), Number(latlng.lng.toFixed(6))]);
+            controles.splice(mejor.i, 0, pt);
             marcarAjusteManual(true);
             pintarTrazado();
             sugerirCallesEnIndice(mejor.i);
@@ -824,20 +890,27 @@
 
         mapa.on('click', (e) => {
             if (!dibujando) return;
-            puntos.push([Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))]);
+            controles.push([Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))]);
+            geometria = redondearPuntos(controles.map((c) => c.slice()));
             marcarAjusteManual(true);
             pintarTrazado();
+            if (controles.length >= 2) sugerirCallesEnIndice(controles.length - 1);
         });
 
         document.getElementById('btnDeshacer').addEventListener('click', () => {
-            if (!puntos.length) return;
-            puntos.pop();
+            if (!controles.length) return;
+            controles.pop();
             marcarAjusteManual(true);
-            pintarTrazado();
+            if (controles.length >= 2) sugerirCallesEnIndice(controles.length - 1);
+            else {
+                geometria = redondearPuntos(controles.map((c) => c.slice()));
+                pintarTrazado();
+            }
         });
         document.getElementById('btnBorrarTrazado').addEventListener('click', async () => {
-            if (puntos.length && !(await MRUI.confirmar({ titulo: '¿Borrar todo el trazado?', mensaje: 'Tendrás que dibujarlo de nuevo o unir paradas otra vez.', aceptar: 'Borrar', peligro: true, icono: 'delete' }))) return;
-            puntos = [];
+            if ((controles.length || geometria.length) && !(await MRUI.confirmar({ titulo: '¿Borrar todo el trazado?', mensaje: 'Tendrás que dibujarlo de nuevo o unir paradas otra vez.', aceptar: 'Borrar', peligro: true, icono: 'delete' }))) return;
+            controles = [];
+            geometria = [];
             marcarAjusteManual(false);
             pintarTrazado();
         });
@@ -848,12 +921,16 @@
         async function unirParadasPorCalles({ auto = false } = {}) {
             if (seleccion.length < 2) {
                 if (!auto) MRUI.aviso('Agrega al menos dos paradas para generar el trazado.', 'advertencia');
-                if (auto && seleccion.length < 2 && !trazadoAjustado) { puntos = []; pintarTrazado(); }
+                if (auto && seleccion.length < 2 && !trazadoAjustado) {
+                    controles = [];
+                    geometria = [];
+                    pintarTrazado();
+                }
                 return;
             }
             if (dibujando || sugiriendoCalle) return;
             if (auto && trazadoAjustado) return;
-            if (!auto && puntos.length && !(await MRUI.confirmar({
+            if (!auto && (controles.length || geometria.length) && !(await MRUI.confirmar({
                 titulo: trazadoAjustado ? '¿Recalcular y perder ajustes?' : '¿Reemplazar el trazado?',
                 mensaje: trazadoAjustado
                     ? 'Tienes cambios manuales. Se borrarán y se volverá a trazar por calles según el orden de paradas.'
@@ -878,11 +955,12 @@
                     if (nuevo.length) seg.shift();
                     nuevo.push(...seg);
                 }
-                puntos = nuevo.map(([lat, lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]);
+                geometria = redondearPuntos(nuevo);
+                sincronizarControlesDesdeGeometria();
                 marcarAjusteManual(false);
                 pintarTrazado();
-                if (puntos.length > 1) mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
-                if (!auto) MRUI.aviso(`Trazado listo: ${puntos.length} puntos. Arrástralos para corregir tramos.`, 'exito', 3200);
+                if (geometria.length > 1) mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
+                if (!auto) MRUI.aviso(`Trazado listo: ${controles.length} controles. Arrastra uno para corregir un tramo.`, 'exito', 3200);
             } catch (e) {
                 if (!auto) MRUI.aviso(e.message || 'No se pudo calcular el trazado por calles. Intenta de nuevo.', 'error');
                 else console.warn('[MoviRuta] Auto-trazo:', e?.message || e);
@@ -928,12 +1006,12 @@
             });
         }
 
-        P.alGuardar(form, (datos) => G.guardarRuta(ruta?.id || null, { ...datos, paradas: seleccion, recorrido: puntos }, ids),
+        P.alGuardar(form, (datos) => G.guardarRuta(ruta?.id || null, { ...datos, paradas: seleccion, recorrido: geometria.length >= 2 ? geometria : controles }, ids),
             { volverA: `${u.rol}/rutas.html`, mensaje: ruta ? 'La ruta se actualizó.' : 'Ruta creada.' });
 
         pintarParadas();
         pintarTrazado();
-        if (puntos.length > 1) mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
+        if (geometria.length > 1 || controles.length > 1) mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
         else if (disponibles.length) mapa.fitBounds(L.latLngBounds(disponibles.map((p) => [p.latitud, p.longitud])), { padding: [30, 30] });
     }
 

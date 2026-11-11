@@ -548,7 +548,7 @@
                             <div id="mapa" class="mr-mapa"></div>
                             <div id="avisoDibujo" class="mr-mapa-capa pointer-events-none absolute left-1/2 top-3 hidden -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">${icono('ads_click', 'text-[18px]')} Haz clic sobre las calles para agregar puntos</div>
                         </div>
-                        <p class="mr-ayuda">Activa "Dibujar trazado" y haz clic sobre las calles por donde circula la ruta. <span id="totalPuntos" class="font-semibold"></span></p>
+                        <p class="mr-ayuda">Al agregar o reordenar paradas, el trazado por calles se calcula solo. También puedes dibujar a mano o usar el botón. <span id="totalPuntos" class="font-semibold"></span></p>
                     </section>
                 </div>
                 ${P.pieFormulario(P.enlace('rutas'), 'Guardar ruta')}
@@ -674,47 +674,78 @@
             puntos = [];
             pintarTrazado();
         });
-        async function tramoCalle(a, b) {
-            return MR.trazarCalle(a, b);
-        }
+        let autoTrazaTimer = null;
+        let firmaSeleccion = '';
+        let primeraPinturaParadas = true;
+        let uniendoCalles = false;
 
-        document.getElementById('btnDesdeParadas').addEventListener('click', async () => {
-            if (seleccion.length < 2) { MRUI.aviso('Agrega al menos dos paradas para generar el trazado.', 'advertencia'); return; }
-            if (puntos.length && !(await MRUI.confirmar({
+        async function unirParadasPorCalles({ auto = false } = {}) {
+            if (seleccion.length < 2) {
+                if (!auto) MRUI.aviso('Agrega al menos dos paradas para generar el trazado.', 'advertencia');
+                if (auto && seleccion.length < 2) { puntos = []; pintarTrazado(); }
+                return;
+            }
+            if (dibujando) return;
+            if (!auto && puntos.length && !(await MRUI.confirmar({
                 titulo: '¿Reemplazar el trazado?',
-                mensaje: 'Se calculará un recorrido por calles (como en Google Maps) según el orden de las paradas.',
+                mensaje: 'Se calculará un recorrido por calles según el orden de las paradas.',
                 aceptar: 'Calcular',
                 icono: 'route',
             }))) return;
+            if (uniendoCalles) return;
+            uniendoCalles = true;
 
             const btn = document.getElementById('btnDesdeParadas');
             const etiqueta = btn.querySelector('span:last-child') || btn;
             const textoAntes = etiqueta.textContent;
             btn.disabled = true;
-            etiqueta.textContent = 'Calculando trazado…';
+            etiqueta.textContent = auto ? 'Trazando…' : 'Calculando trazado…';
             try {
                 const coords = seleccion.map((pid) => [porId.get(pid).latitud, porId.get(pid).longitud]);
                 if (form.sentido.value === 'circular') coords.push(coords[0].slice());
                 const nuevo = [];
                 for (let i = 0; i < coords.length - 1; i += 1) {
-                    const seg = await tramoCalle(coords[i], coords[i + 1]);
+                    const seg = await MR.trazarCalle(coords[i], coords[i + 1]);
                     if (nuevo.length) seg.shift();
                     nuevo.push(...seg);
                 }
                 puntos = nuevo.map(([lat, lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]);
                 pintarTrazado();
                 if (puntos.length > 1) mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
-                MRUI.aviso(`Trazado listo: ${puntos.length} puntos por calles.`, 'exito', 2800);
+                if (!auto) MRUI.aviso(`Trazado listo: ${puntos.length} puntos por calles.`, 'exito', 2800);
             } catch (e) {
-                MRUI.aviso(e.message || 'No se pudo calcular el trazado por calles. Intenta de nuevo.', 'error');
+                if (!auto) MRUI.aviso(e.message || 'No se pudo calcular el trazado por calles. Intenta de nuevo.', 'error');
+                else console.warn('[MoviRuta] Auto-trazo:', e?.message || e);
             } finally {
+                uniendoCalles = false;
                 btn.disabled = false;
                 etiqueta.textContent = textoAntes || 'Unir paradas por calles';
             }
-        });
+        }
 
-        inputColor.addEventListener('input', () => { pintarParadas(); pintarTrazado(); });
-        form.codigo.addEventListener('input', pintarParadas);
+        function programarAutoTraza() {
+            const firma = `${seleccion.join(',')}|${form.sentido.value}`;
+            if (firma === firmaSeleccion) return;
+            firmaSeleccion = firma;
+            if (primeraPinturaParadas) {
+                primeraPinturaParadas = false;
+                return;
+            }
+            clearTimeout(autoTrazaTimer);
+            autoTrazaTimer = setTimeout(() => unirParadasPorCalles({ auto: true }), 650);
+        }
+
+        const _pintarParadasOrig = pintarParadas;
+        pintarParadas = function pintarParadasYAuto() {
+            _pintarParadasOrig();
+            programarAutoTraza();
+        };
+
+        document.getElementById('btnDesdeParadas').addEventListener('click', () => unirParadasPorCalles({ auto: false }));
+        form.sentido.addEventListener('change', () => programarAutoTraza());
+
+        inputColor.addEventListener('input', () => { _pintarParadasOrig(); pintarTrazado(); });
+        form.codigo.addEventListener('input', () => { _pintarParadasOrig(); });
 
         const selEstadoRuta = form.querySelector('#estado_clave');
         const selMunRuta = form.querySelector('#municipio_clave');

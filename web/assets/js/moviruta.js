@@ -212,10 +212,10 @@ const MR = (() => {
             clave = (cfg && cfg.google_maps_api_key) || '';
         } catch (e) { /* sin config */ }
         if (!clave) return false;
+        config.googleMapsKey = clave;
         const ok = await asegurarGoogleMaps(clave);
         if (!ok || !mapa._loaded) return false;
         config.googleMaps = true;
-        config.googleMapsKey = clave;
         const actual = control.actual || 'mapa';
         try { mapa.removeLayer(capas[actual]); } catch (e) { /* ignore */ }
         capas.mapa = capaGoogle('roadmap', 'Mapa');
@@ -227,31 +227,7 @@ const MR = (() => {
         return true;
     }
 
-    /** Trazo por calles: Google Directions si hay Maps; si no, OSRM. */
-    async function trazarCalle(a, b) {
-        if (config.googleMaps && window.google?.maps?.DirectionsService) {
-            const svc = new google.maps.DirectionsService();
-            const res = await new Promise((resolver, rechazar) => {
-                svc.route(
-                    {
-                        origin: { lat: a[0], lng: a[1] },
-                        destination: { lat: b[0], lng: b[1] },
-                        travelMode: google.maps.TravelMode.DRIVING,
-                    },
-                    (resultado, estado) => {
-                        if (estado === 'OK' && resultado?.routes?.[0]) resolver(resultado);
-                        else rechazar(new Error(estado === 'ZERO_RESULTS' ? 'No hay vialidad entre esas paradas.' : 'No se pudo calcular el tramo con Google.'));
-                    },
-                );
-            });
-            const path = res.routes[0].overview_path || [];
-            const pts = path.map((p) => [p.lat(), p.lng()]);
-            if (pts.length) {
-                pts[0] = [a[0], a[1]];
-                pts[pts.length - 1] = [b[0], b[1]];
-            }
-            return pts;
-        }
+    async function trazarCalleOsrm(a, b) {
         const url = `https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`;
         const r = await fetch(url);
         if (!r.ok) throw new Error('No se pudo calcular el tramo.');
@@ -263,6 +239,42 @@ const MR = (() => {
         pts[0] = [a[0], a[1]];
         pts[pts.length - 1] = [b[0], b[1]];
         return pts;
+    }
+
+    /** Trazo por calles: Google Directions (si hay key + API); si falla, OSRM. */
+    async function trazarCalle(a, b) {
+        if (!config.googleMaps && config.googleMapsKey) {
+            await asegurarGoogleMaps(config.googleMapsKey);
+            config.googleMaps = !!(window.google?.maps && L.gridLayer?.googleMutant);
+        }
+        if (window.google?.maps?.DirectionsService) {
+            try {
+                const svc = new google.maps.DirectionsService();
+                const res = await new Promise((resolver, rechazar) => {
+                    svc.route(
+                        {
+                            origin: { lat: a[0], lng: a[1] },
+                            destination: { lat: b[0], lng: b[1] },
+                            travelMode: google.maps.TravelMode.DRIVING,
+                        },
+                        (resultado, estado) => {
+                            if (estado === 'OK' && resultado?.routes?.[0]) resolver(resultado);
+                            else rechazar(new Error(String(estado || 'ERROR')));
+                        },
+                    );
+                });
+                const path = res.routes[0].overview_path || [];
+                const pts = path.map((p) => [p.lat(), p.lng()]);
+                if (pts.length) {
+                    pts[0] = [a[0], a[1]];
+                    pts[pts.length - 1] = [b[0], b[1]];
+                    return pts;
+                }
+            } catch (e) {
+                console.warn('[MoviRuta] Directions Google falló, usando OSRM:', e?.message || e);
+            }
+        }
+        return trazarCalleOsrm(a, b);
     }
 
     function crearMapa(id, opciones = {}) {

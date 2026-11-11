@@ -539,16 +539,17 @@
                     <section class="mr-tarjeta p-6 xl:col-span-7">
                         <h3 class="mb-3 flex items-center gap-2 font-headline-sm text-headline-sm">${icono('draw', 'text-secondary')} Trazado en el mapa</h3>
                         <div class="mb-3 flex flex-wrap gap-2">
-                            <button class="mr-btn mr-btn-contorno mr-btn-sm" type="button" id="btnDibujar">${icono('edit')} <span>Dibujar trazado</span></button>
+                            <button class="mr-btn mr-btn-contorno mr-btn-sm" type="button" id="btnDibujar">${icono('edit')} <span>Agregar puntos</span></button>
                             <button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" id="btnDesdeParadas">${icono('route')} <span>Unir paradas por calles</span></button>
                             <button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" id="btnDeshacer">${icono('undo')} Deshacer punto</button>
                             <button class="mr-btn mr-btn-secundario mr-btn-sm" type="button" id="btnBorrarTrazado">${icono('delete')} Borrar trazado</button>
                         </div>
+                        <p id="estadoTrazado" class="mb-2 hidden items-center gap-1.5 text-xs font-semibold text-secondary">${icono('tune', 'text-[16px]')} Trazado ajustado a mano — el auto no lo sobrescribe. Usa “Unir paradas” para recalcular.</p>
                         <div class="mr-mapa-tarjeta relative h-[460px] overflow-hidden rounded-xl ring-1 ring-black/5">
                             <div id="mapa" class="mr-mapa"></div>
-                            <div id="avisoDibujo" class="mr-mapa-capa pointer-events-none absolute left-1/2 top-3 hidden -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">${icono('ads_click', 'text-[18px]')} Haz clic sobre las calles para agregar puntos</div>
+                            <div id="avisoDibujo" class="mr-mapa-capa pointer-events-none absolute left-1/2 top-3 hidden -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">${icono('ads_click', 'text-[18px]')} Clic = agregar · Arrastra puntos · Doble clic en un punto = borrar</div>
                         </div>
-                        <p class="mr-ayuda">Al agregar o reordenar paradas, el trazado por calles se calcula solo. También puedes dibujar a mano o usar el botón. <span id="totalPuntos" class="font-semibold"></span></p>
+                        <p class="mr-ayuda">Auto une paradas por calles; luego arrastra los puntos o haz clic en la línea para insertar y corregir donde el camión no pasa. <span id="totalPuntos" class="font-semibold"></span></p>
                     </section>
                 </div>
                 ${P.pieFormulario(P.enlace('rutas'), 'Guardar ruta')}
@@ -560,14 +561,29 @@
         const btnDibujar = document.getElementById('btnDibujar');
         const mapa = MR.crearMapa('mapa');
         const marcadores = new Map();
-        const linea = L.polyline(puntos, { color: inputColor.value, weight: 5, opacity: 0.85 }).addTo(mapa);
+        const linea = L.polyline(puntos, { color: inputColor.value, weight: 5, opacity: 0.85, interactive: true }).addTo(mapa);
         const vertices = L.layerGroup().addTo(mapa);
+        let trazadoAjustado = puntos.length > 0; // al editar ruta existente se respeta el recorrido guardado
+
+        function marcarAjusteManual(si = true) {
+            trazadoAjustado = si;
+            const chip = document.getElementById('estadoTrazado');
+            if (chip) {
+                chip.classList.toggle('hidden', !si);
+                chip.classList.toggle('flex', si);
+            }
+        }
 
         disponibles.forEach((p) => {
             const m = L.marker([p.latitud, p.longitud], { icon: MR.iconoParada('#94A3B8'), title: p.nombre })
                 .bindTooltip(p.nombre)
                 .on('click', () => {
-                    if (dibujando) { puntos.push([p.latitud, p.longitud]); pintarTrazado(); return; }
+                    if (dibujando) {
+                        puntos.push([p.latitud, p.longitud]);
+                        marcarAjusteManual(true);
+                        pintarTrazado();
+                        return;
+                    }
                     const pid = String(p.id);
                     if (!seleccion.includes(pid)) { seleccion.push(pid); pintarParadas(); MRUI.aviso(`Parada "${p.nombre}" agregada.`, 'info', 1800); }
                 })
@@ -595,13 +611,86 @@
             });
         }
 
+        function iconoVertice() {
+            return L.divIcon({
+                className: 'mr-icono-limpio',
+                html: '<span class="mr-vertice-trazo"></span>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7],
+            });
+        }
+
         function pintarTrazado() {
             linea.setLatLngs(puntos);
             linea.setStyle({ color: inputColor.value });
             vertices.clearLayers();
-            if (dibujando) puntos.forEach((p) => L.circleMarker(p, { radius: 4, color: '#004532', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(vertices));
-            document.getElementById('totalPuntos').textContent = puntos.length ? `Puntos del trazado: ${puntos.length}.` : '';
+            puntos.forEach((p, i) => {
+                const m = L.marker(p, {
+                    draggable: true,
+                    icon: iconoVertice(),
+                    title: `Punto ${i + 1} — arrastra para ajustar`,
+                    zIndexOffset: 600,
+                }).addTo(vertices);
+                m.on('drag', () => {
+                    const ll = m.getLatLng();
+                    puntos[i] = [ll.lat, ll.lng];
+                    linea.setLatLngs(puntos);
+                });
+                m.on('dragend', () => {
+                    const ll = m.getLatLng();
+                    puntos[i] = [Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6))];
+                    marcarAjusteManual(true);
+                    pintarTrazado();
+                });
+                m.on('dblclick', (e) => {
+                    L.DomEvent.stop(e);
+                    if (puntos.length <= 2) {
+                        MRUI.aviso('Deja al menos 2 puntos en el trazado.', 'advertencia', 2200);
+                        return;
+                    }
+                    puntos.splice(i, 1);
+                    marcarAjusteManual(true);
+                    pintarTrazado();
+                });
+            });
+            const chip = document.getElementById('estadoTrazado');
+            if (chip) {
+                chip.classList.toggle('hidden', !trazadoAjustado);
+                chip.classList.toggle('flex', trazadoAjustado);
+            }
+            document.getElementById('totalPuntos').textContent = puntos.length
+                ? `Puntos del trazado: ${puntos.length}${trazadoAjustado ? ' (ajustado)' : ''}.`
+                : '';
         }
+
+        function insertarPuntoEnLinea(latlng) {
+            if (puntos.length < 2) {
+                puntos.push([Number(latlng.lat.toFixed(6)), Number(latlng.lng.toFixed(6))]);
+                marcarAjusteManual(true);
+                pintarTrazado();
+                return;
+            }
+            let mejor = { i: 1, d: Infinity };
+            for (let i = 0; i < puntos.length - 1; i += 1) {
+                const a = L.latLng(puntos[i]);
+                const b = L.latLng(puntos[i + 1]);
+                const d = L.LineUtil.pointToSegmentDistance(
+                    mapa.latLngToLayerPoint(latlng),
+                    mapa.latLngToLayerPoint(a),
+                    mapa.latLngToLayerPoint(b),
+                );
+                if (d < mejor.d) mejor = { i: i + 1, d };
+            }
+            puntos.splice(mejor.i, 0, [Number(latlng.lat.toFixed(6)), Number(latlng.lng.toFixed(6))]);
+            marcarAjusteManual(true);
+            pintarTrazado();
+        }
+
+        linea.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            if (dibujando) return;
+            insertarPuntoEnLinea(e.latlng);
+        });
 
         lista.addEventListener('click', (e) => {
             const mover = e.target.closest('[data-mover]');
@@ -654,7 +743,7 @@
             dibujando = !dibujando;
             btnDibujar.classList.toggle('mr-btn-primario', dibujando);
             btnDibujar.classList.toggle('mr-btn-contorno', !dibujando);
-            btnDibujar.querySelector('span:last-child').textContent = dibujando ? 'Terminar de dibujar' : 'Dibujar trazado';
+            btnDibujar.querySelector('span:last-child').textContent = dibujando ? 'Terminar de agregar' : 'Agregar puntos';
             mapa.getContainer().style.cursor = dibujando ? 'crosshair' : '';
             const aviso = document.getElementById('avisoDibujo');
             aviso.classList.toggle('hidden', !dibujando);
@@ -665,13 +754,20 @@
         mapa.on('click', (e) => {
             if (!dibujando) return;
             puntos.push([Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))]);
+            marcarAjusteManual(true);
             pintarTrazado();
         });
 
-        document.getElementById('btnDeshacer').addEventListener('click', () => { puntos.pop(); pintarTrazado(); });
+        document.getElementById('btnDeshacer').addEventListener('click', () => {
+            if (!puntos.length) return;
+            puntos.pop();
+            marcarAjusteManual(true);
+            pintarTrazado();
+        });
         document.getElementById('btnBorrarTrazado').addEventListener('click', async () => {
-            if (puntos.length && !(await MRUI.confirmar({ titulo: '¿Borrar todo el trazado?', mensaje: 'Tendrás que dibujarlo de nuevo.', aceptar: 'Borrar', peligro: true, icono: 'delete' }))) return;
+            if (puntos.length && !(await MRUI.confirmar({ titulo: '¿Borrar todo el trazado?', mensaje: 'Tendrás que dibujarlo de nuevo o unir paradas otra vez.', aceptar: 'Borrar', peligro: true, icono: 'delete' }))) return;
             puntos = [];
+            marcarAjusteManual(false);
             pintarTrazado();
         });
         let autoTrazaTimer = null;
@@ -682,13 +778,16 @@
         async function unirParadasPorCalles({ auto = false } = {}) {
             if (seleccion.length < 2) {
                 if (!auto) MRUI.aviso('Agrega al menos dos paradas para generar el trazado.', 'advertencia');
-                if (auto && seleccion.length < 2) { puntos = []; pintarTrazado(); }
+                if (auto && seleccion.length < 2 && !trazadoAjustado) { puntos = []; pintarTrazado(); }
                 return;
             }
             if (dibujando) return;
+            if (auto && trazadoAjustado) return;
             if (!auto && puntos.length && !(await MRUI.confirmar({
-                titulo: '¿Reemplazar el trazado?',
-                mensaje: 'Se calculará un recorrido por calles según el orden de las paradas.',
+                titulo: trazadoAjustado ? '¿Recalcular y perder ajustes?' : '¿Reemplazar el trazado?',
+                mensaje: trazadoAjustado
+                    ? 'Tienes cambios manuales. Se borrarán y se volverá a trazar por calles según el orden de paradas.'
+                    : 'Se calculará un recorrido por calles según el orden de las paradas.',
                 aceptar: 'Calcular',
                 icono: 'route',
             }))) return;
@@ -710,9 +809,10 @@
                     nuevo.push(...seg);
                 }
                 puntos = nuevo.map(([lat, lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]);
+                marcarAjusteManual(false);
                 pintarTrazado();
                 if (puntos.length > 1) mapa.fitBounds(linea.getBounds(), { padding: [30, 30] });
-                if (!auto) MRUI.aviso(`Trazado listo: ${puntos.length} puntos por calles.`, 'exito', 2800);
+                if (!auto) MRUI.aviso(`Trazado listo: ${puntos.length} puntos. Arrástralos para corregir tramos.`, 'exito', 3200);
             } catch (e) {
                 if (!auto) MRUI.aviso(e.message || 'No se pudo calcular el trazado por calles. Intenta de nuevo.', 'error');
                 else console.warn('[MoviRuta] Auto-trazo:', e?.message || e);
@@ -731,6 +831,7 @@
                 primeraPinturaParadas = false;
                 return;
             }
+            if (trazadoAjustado) return;
             clearTimeout(autoTrazaTimer);
             autoTrazaTimer = setTimeout(() => unirParadasPorCalles({ auto: true }), 650);
         }

@@ -383,6 +383,12 @@ input[type="color"].mr-campo { padding: .25rem; height: 46px; cursor: pointer; }
     transform: rotate(var(--ang, 0deg));
     transform-origin: 50% 60%;
 }
+.mr-vertice-trazo {
+    display: block; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; border: 3px solid #004532;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .4); cursor: grab;
+}
+.mr-vertice-trazo:active { cursor: grabbing; }
 
 /* ---------- Ventanas modales y avisos ---------- */
 .mr-modal { position: fixed; inset: 0; z-index: 2000; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(25, 28, 30, .5); backdrop-filter: blur(4px); }

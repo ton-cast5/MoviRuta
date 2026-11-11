@@ -28,8 +28,8 @@ INSERT INTO linea_transporte (id, nombre, descripcion, telefono, dueno_id, activ
     (3, 'Transportes Costa Paraíso', 'Servicio foráneo Paraíso – Villahermosa y local a Puerto Ceiba y La Isla (demostración).', '933 000 0003', 11, 1);
 
 INSERT INTO chofer (id, usuario_id, linea_id, numero_licencia, telefono, activo) VALUES
-    (1, 4, 1, 'DEMO-LIC-0001', '993 100 0001', 1),
-    (2, 5, 1, 'DEMO-LIC-0002', '993 100 0002', 1),
+    (1, 4, 1, '125WTFG2', '993 100 0001', 1),
+    (2, 5, 1, '159WTCS1', '993 100 0002', 1),
     (3, 6, 2, 'DEMO-LIC-0003', '993 100 0003', 1),
     (4, 7, 2, 'DEMO-LIC-0004', '993 100 0004', 1),
     (5, 8, 2, 'DEMO-LIC-0005', '993 100 0005', 1),

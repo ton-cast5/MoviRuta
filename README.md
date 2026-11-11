@@ -21,7 +21,7 @@ MoviRuta/
 |---|---|
 | Línea | `TAB-001-TNL` |
 | Ruta / parada | `TAB-014-0001` (estado-municipio INEGI-serie) |
-| Vehículo | placa (`16J-101`) |
+| Vehículo | placa (`16JTN-101`) |
 | Usuario | `USER-pasajero-001` |
 | Chofer | número de licencia |
 | Viaje | `TNL-16J-001` |

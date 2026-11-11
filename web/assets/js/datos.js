@@ -3,7 +3,7 @@
  * Alineados al seed de Paraíso (TAB-014-…). Las contraseñas no se envían al cliente; el login usa el API.
  */
 window.MR_DATOS_DEMO = {
-    version: 6,
+    version: 7,
     estados: [{ clave: 'TAB', nombre: 'Tabasco' }],
     municipios: [
         { estado_clave: 'TAB', clave: '001', nombre: 'Centro' },
@@ -24,13 +24,13 @@ window.MR_DATOS_DEMO = {
         { id: 'TAB-002-TCP', estado_clave: 'TAB', siglas: 'TCP', nombre: 'Transportes Costa Paraíso', descripcion: 'Paraíso – Puerto Ceiba – La Isla (demostración).', telefono: '933 000 0003', duenos: ['USER-dueno-001'], activa: true },
     ],
     choferes: [
-        { id: 'DEMO-LIC-0001', usuario_id: 'USER-chofer-001', linea_id: 'TAB-001-TNL', numero_licencia: 'DEMO-LIC-0001', telefono: '933 100 0001', seguro_vida: true, activo: true },
-        { id: 'DEMO-LIC-0002', usuario_id: 'USER-chofer-002', linea_id: 'TAB-001-TNL', numero_licencia: 'DEMO-LIC-0002', telefono: '933 100 0002', seguro_vida: false, activo: true },
+        { id: '125WTFG2', usuario_id: 'USER-chofer-001', linea_id: 'TAB-001-TNL', numero_licencia: '125WTFG2', telefono: '933 100 0001', seguro_vida: true, activo: true },
+        { id: '159WTCS1', usuario_id: 'USER-chofer-002', linea_id: 'TAB-001-TNL', numero_licencia: '159WTCS1', telefono: '933 100 0002', seguro_vida: false, activo: true },
         { id: 'DEMO-LIC-0003', usuario_id: 'USER-chofer-003', linea_id: 'TAB-002-TCP', numero_licencia: 'DEMO-LIC-0003', telefono: '933 100 0003', seguro_vida: true, activo: true },
     ],
     vehiculos: [
-        { id: '16J-101', placa: '16J-101', linea_id: 'TAB-001-TNL', numero_unidad: '16J', modelo: 'Autobús urbano 2020', capacidad: 40, cuenta_con_gps: true, climatizado: true, tv_a_bordo: false, accesible: true, activo: true, cuenta_con_seguro: true, nombre_seguro: 'Qualitas', poliza_seguro: 'QA-16J101-2026' },
-        { id: '16J-102', placa: '16J-102', linea_id: 'TAB-001-TNL', numero_unidad: '17J', modelo: 'Microbús 2018', capacidad: 30, cuenta_con_gps: true, climatizado: false, tv_a_bordo: false, accesible: false, activo: true, cuenta_con_seguro: false, nombre_seguro: null, poliza_seguro: null },
+        { id: '16JTN-101', placa: '16JTN-101', linea_id: 'TAB-001-TNL', numero_unidad: '16J', modelo: 'Autobús urbano 2020', capacidad: 40, cuenta_con_gps: true, climatizado: true, tv_a_bordo: false, accesible: true, activo: true, cuenta_con_seguro: true, nombre_seguro: 'Qualitas', poliza_seguro: 'QA-16J101-2026' },
+        { id: '17TN-101', placa: '17TN-101', linea_id: 'TAB-001-TNL', numero_unidad: '17J', modelo: 'Microbús 2018', capacidad: 30, cuenta_con_gps: true, climatizado: false, tv_a_bordo: false, accesible: false, activo: true, cuenta_con_seguro: false, nombre_seguro: null, poliza_seguro: null },
         { id: 'TCP-301', placa: 'TCP-301', linea_id: 'TAB-002-TCP', numero_unidad: '01', modelo: 'Van 2021', capacidad: 15, cuenta_con_gps: true, climatizado: true, tv_a_bordo: true, accesible: false, activo: true, cuenta_con_seguro: true, nombre_seguro: 'GNP', poliza_seguro: 'GNP-TCP301-2026' },
     ],
     paradas: [
@@ -64,13 +64,13 @@ window.MR_DATOS_DEMO = {
         },
     ],
     viajes: [
-        { id: 'TNL-16J-001', chofer_id: 'DEMO-LIC-0001', vehiculo_id: '16J-101', ruta_id: 'TAB-014-0001', hace_min: 25, pasajeros_salida: 18, estado: 'en_curso' },
+        { id: 'TNL-16J-001', chofer_id: '125WTFG2', vehiculo_id: '16JTN-101', ruta_id: 'TAB-014-0001', hace_min: 25, pasajeros_salida: 18, estado: 'en_curso' },
         { id: 'TCP-01-001', chofer_id: 'DEMO-LIC-0003', vehiculo_id: 'TCP-301', ruta_id: 'TAB-014-0003', hace_min: 120, duracion_min: 30, pasajeros_salida: 10, estado: 'finalizado' },
     ],
     reportes: [
         { id: 'TAB-014-0001-001', ruta_id: 'TAB-014-0001', usuario_id: 'USER-pasajero-001', descripcion: 'Choque leve cerca del mercado (demostración).', latitud: 18.4009, longitud: -93.2125, estado: 'nuevo', hace_min: 40, revisado_por: null, revisado_hace_min: null },
     ],
     fallas: [
-        { id: '16J-102-TAB-001-TNL-001', vehiculo_id: '16J-102', tipo: 'clima', descripcion: 'Aire acondicionado no enfría.', impide_circular: false, estado: 'pendiente', reportado_por: 'USER-chofer-002', viaje_id: null, hace_min: 1440, atendido_por: null, nota_solucion: null, resuelto_hace_min: null },
+        { id: '17TN-101-TAB-001-TNL-001', vehiculo_id: '17TN-101', tipo: 'clima', descripcion: 'Aire acondicionado no enfría.', impide_circular: false, estado: 'pendiente', reportado_por: 'USER-chofer-002', viaje_id: null, hace_min: 1440, atendido_por: null, nota_solucion: null, resuelto_hace_min: null },
     ],
 };

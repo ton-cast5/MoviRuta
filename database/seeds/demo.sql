@@ -25,13 +25,13 @@ INSERT INTO linea_dueno (linea_id, usuario_id) VALUES
     ('TAB-002-TCP', 'USER-dueno-001');
 
 INSERT INTO chofer (numero_licencia, usuario_id, linea_id, telefono, seguro_vida, activo) VALUES
-    ('DEMO-LIC-0001', 'USER-chofer-001', 'TAB-001-TNL', '933 100 0001', 1, 1),
-    ('DEMO-LIC-0002', 'USER-chofer-002', 'TAB-001-TNL', '933 100 0002', 0, 1),
+    ('125WTFG2', 'USER-chofer-001', 'TAB-001-TNL', '933 100 0001', 1, 1),
+    ('159WTCS1', 'USER-chofer-002', 'TAB-001-TNL', '933 100 0002', 0, 1),
     ('DEMO-LIC-0003', 'USER-chofer-003', 'TAB-002-TCP', '933 100 0003', 1, 1);
 
 INSERT INTO vehiculo (placa, linea_id, numero_unidad, modelo, capacidad, cuenta_con_gps, climatizado, tv_a_bordo, accesible, activo, cuenta_con_seguro, nombre_seguro, poliza_seguro) VALUES
-    ('16J-101', 'TAB-001-TNL', '16J', 'Autobús urbano 2020', 40, 1, 1, 0, 1, 1, 1, 'Qualitas', 'QA-16J101-2026'),
-    ('16J-102', 'TAB-001-TNL', '17J', 'Microbús 2018', 30, 1, 0, 0, 0, 1, 0, NULL, NULL),
+    ('16JTN-101', 'TAB-001-TNL', '16J', 'Autobús urbano 2020', 40, 1, 1, 0, 1, 1, 1, 'Qualitas', 'QA-16J101-2026'),
+    ('17TN-101', 'TAB-001-TNL', '17J', 'Microbús 2018', 30, 1, 0, 0, 0, 1, 0, NULL, NULL),
     ('TCP-301', 'TAB-002-TCP', '01', 'Van 2021', 15, 1, 1, 1, 0, 1, 1, 'GNP', 'GNP-TCP301-2026');
 
 INSERT INTO parada (id, estado_clave, municipio_clave, serie, codigo, nombre, referencia, latitud, longitud, activa) VALUES
@@ -62,7 +62,7 @@ INSERT INTO recorrido_punto (ruta_id, orden, latitud, longitud) VALUES
     ('TAB-014-0003', 1, 18.402806, -93.205326), ('TAB-014-0003', 2, 18.411818, -93.179109), ('TAB-014-0003', 3, 18.433227, -93.153173);
 
 INSERT INTO viaje (id, chofer_id, vehiculo_id, ruta_id, inicio, fin, pasajeros_salida, estado) VALUES
-    ('TNL-16J-001', 'DEMO-LIC-0001', '16J-101', 'TAB-014-0001', NOW() - INTERVAL '25 minutes', NULL, 18, 'en_curso'),
+    ('TNL-16J-001', '125WTFG2', '16JTN-101', 'TAB-014-0001', NOW() - INTERVAL '25 minutes', NULL, 18, 'en_curso'),
     ('TCP-01-001', 'DEMO-LIC-0003', 'TCP-301', 'TAB-014-0003', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '90 minutes', 10, 'finalizado');
 
 INSERT INTO reporte_accidente (id, ruta_id, usuario_id, descripcion, latitud, longitud, estado, creado_en) VALUES
@@ -71,7 +71,7 @@ INSERT INTO reporte_accidente (id, ruta_id, usuario_id, descripcion, latitud, lo
      18.400900, -93.212500, 'nuevo', NOW() - INTERVAL '40 minutes');
 
 INSERT INTO falla_vehiculo (id, vehiculo_id, linea_id, tipo, descripcion, impide_circular, estado, reportado_por, viaje_id, creado_en) VALUES
-    ('16J-102-TAB-001-TNL-001', '16J-102', 'TAB-001-TNL', 'clima', 'Aire acondicionado no enfría.', 0, 'pendiente',
+    ('17TN-101-TAB-001-TNL-001', '17TN-101', 'TAB-001-TNL', 'clima', 'Aire acondicionado no enfría.', 0, 'pendiente',
      'USER-chofer-002', NULL, NOW() - INTERVAL '1 day');
 
 -- recorridos densos Paraíso (OSRM)

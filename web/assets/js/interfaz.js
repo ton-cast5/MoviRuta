@@ -444,10 +444,15 @@ const MRUI = (() => {
     function pie() {
         const destino = document.getElementById('mr-pie');
         if (!destino) return;
-        const telefonos = S.consulta.telefonosLineas().map((l) => `
+        const contactosSoporte = [
+            { nombre: 'Antonio', telefono: '9331330070' },
+            { nombre: 'Camacho', telefono: '9332081654' },
+            { nombre: 'Angel', telefono: '9935181650' },
+        ];
+        const telefonos = contactosSoporte.map((c) => `
             <li class="flex items-start gap-2">${icono('call', 'text-[18px] text-secondary-container mt-0.5')}
-                <span><span class="block text-white/60 text-xs">${esc(l.nombre)}</span>
-                <a href="tel:${esc(String(l.telefono).replace(/[^0-9+]/g, ''))}" class="font-semibold text-white hover:text-secondary-container">${esc(l.telefono)}</a></span>
+                <span><span class="block text-white/60 text-xs">${esc(c.nombre)}</span>
+                <a href="tel:${esc(c.telefono)}" class="font-semibold text-white hover:text-secondary-container">${esc(c.telefono)}</a></span>
             </li>`).join('');
         const enlace = (ruta, texto) => `<li><a href="${url(ruta)}" class="text-white/70 hover:text-secondary-container">${texto}</a></li>`;
         const pieEl = document.createElement('footer');
